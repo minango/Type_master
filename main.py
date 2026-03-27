@@ -61,7 +61,7 @@ async def main():
 
     while True:
 
-        # ===== 難易度 =====
+        # ===== 難易度選択 =====
         buttons = [
             Button((60,200,120,50),GREEN,"Easy"),
             Button((200,200,120,50),BLUE,"Normal"),
@@ -79,20 +79,27 @@ async def main():
             pygame.display.flip()
 
             for e in pygame.event.get():
-                if e.type==pygame.QUIT: return
-                if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
-                    pos = pygame.mouse.get_pos()
-                    for b in buttons:
-                        if b.rect.collidepoint(pos):
-                            if b.text=="Easy": max_player_hp=20
-                            elif b.text=="Normal": max_player_hp=10
-                            elif b.text=="Hard": max_player_hp=5
-                            elif b.text=="Ultra": max_player_hp=1
-                            selecting=False
+                if e.type==pygame.QUIT:
+                    return
+
+                if e.type == pygame.FINGERDOWN:
+                    pos = (e.x*WIDTH, e.y*HEIGHT)
+                elif e.type == pygame.MOUSEBUTTONDOWN:
+                    pos = e.pos
+                else:
+                    continue
+
+                for b in buttons:
+                    if b.rect.collidepoint(pos):
+                        if b.text=="Easy": max_player_hp=20
+                        elif b.text=="Normal": max_player_hp=10
+                        elif b.text=="Hard": max_player_hp=5
+                        elif b.text=="Ultra": max_player_hp=1
+                        selecting=False
 
             await asyncio.sleep(0)
 
-        # ===== レベル =====
+        # ===== ステージ選択 =====
         level_buttons=[]
         for i in range(10):
             level_buttons.append(Button((20+i*45,350,40,40),(0,255-20*i,255),str(i+1)))
@@ -107,17 +114,24 @@ async def main():
             pygame.display.flip()
 
             for e in pygame.event.get():
-                if e.type==pygame.QUIT: return
-                if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
-                    pos = pygame.mouse.get_pos()
-                    for i,b in enumerate(level_buttons):
-                        if b.rect.collidepoint(pos):
-                            cp_level=i
-                            selecting=False
+                if e.type==pygame.QUIT:
+                    return
+
+                if e.type == pygame.FINGERDOWN:
+                    pos = (e.x*WIDTH, e.y*HEIGHT)
+                elif e.type == pygame.MOUSEBUTTONDOWN:
+                    pos = e.pos
+                else:
+                    continue
+
+                for i,b in enumerate(level_buttons):
+                    if b.rect.collidepoint(pos):
+                        cp_level=i
+                        selecting=False
 
             await asyncio.sleep(0)
 
-        # ===== ゲーム =====
+        # ===== ゲーム本編 =====
         player=pygame.Rect(WIDTH//2-25, HEIGHT-150,50,50)
         enemy=pygame.Rect(WIDTH//2-25,50,50,50)
 
@@ -144,7 +158,7 @@ async def main():
 
             moving_left = moving_right = shooting = False
 
-            # ===== タッチ管理（完全版） =====
+            # ===== タッチ管理 =====
             for e in pygame.event.get():
                 if e.type==pygame.QUIT:
                     return
@@ -155,7 +169,7 @@ async def main():
                 if e.type==pygame.FINGERUP:
                     active_touches.pop(e.finger_id, None)
 
-            # 同時押しOK
+            # 同時押し
             for tx,ty in active_touches.values():
                 x,y = tx*WIDTH, ty*HEIGHT
                 if left_btn.collidepoint((x,y)): moving_left=True
