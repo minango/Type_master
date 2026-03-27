@@ -47,25 +47,34 @@ class Button:
     def is_clicked(self,pos):
         return self.rect.collidepoint(pos)
 
-async def main():
-    # ===== 難易度選択 =====
+# ===== メッセージ表示 =====
+def show_message(text, duration=1.5):
+    end_time = pygame.time.get_ticks() + int(duration*1000)
+    while pygame.time.get_ticks() < end_time:
+        screen.fill(BLACK)
+        screen.blit(font.render(text, True, WHITE),
+                    font.render(text, True, WHITE).get_rect(center=(WIDTH//2, HEIGHT//2)))
+        pygame.display.flip()
+        clock.tick(60)
+
+# ===== 難易度選択 =====
+async def select_difficulty():
     difficulty_buttons = [
         Button((60,200,120,50),GREEN,"Easy"),
         Button((200,200,120,50),BLUE,"Normal"),
         Button((60,270,120,50),ORANGE,"Hard"),
         Button((200,270,120,50),RED,"Ultra"),
     ]
-
-    selecting=True
-    max_player_hp=10
-    difficulty_text="Normal"
+    selecting = True
+    max_player_hp = 10
+    difficulty_text = "Normal"
     while selecting:
         screen.fill(BLACK)
         screen.blit(font.render("Select Difficulty",True,WHITE),(100,100))
         for btn in difficulty_buttons: btn.draw(screen)
         pygame.display.flip()
         for e in pygame.event.get():
-            if e.type==pygame.QUIT: pygame.quit(); return
+            if e.type==pygame.QUIT: pygame.quit(); return None,None
             if e.type==pygame.MOUSEBUTTONDOWN:
                 for btn in difficulty_buttons:
                     if btn.is_clicked(pygame.mouse.get_pos()):
@@ -76,10 +85,10 @@ async def main():
                         difficulty_text=btn.text
                         selecting=False
         await asyncio.sleep(0)
+    return max_player_hp, difficulty_text
 
-    player_hp = max_player_hp
-
-    # ===== レベル選択 =====
+# ===== レベル選択 =====
+async def select_cp_level():
     colors=[
         (180,180,180),(160,160,220),(140,140,255),(120,180,255),(100,200,255),
         (80,220,255),(60,240,255),(40,255,200),(20,255,100),(0,255,0)
@@ -87,7 +96,6 @@ async def main():
     level_buttons=[]
     for i in range(10):
         level_buttons.append(Button((20+i*45,350,40,40),colors[i],str(i+1)))
-
     selecting=True
     cp_level=0
     while selecting:
@@ -96,15 +104,18 @@ async def main():
         for btn in level_buttons: btn.draw(screen)
         pygame.display.flip()
         for e in pygame.event.get():
-            if e.type==pygame.QUIT: pygame.quit(); return
+            if e.type==pygame.QUIT: pygame.quit(); return None
             if e.type==pygame.MOUSEBUTTONDOWN:
                 for i,btn in enumerate(level_buttons):
                     if btn.is_clicked(pygame.mouse.get_pos()):
                         cp_level=i
                         selecting=False
         await asyncio.sleep(0)
+    return cp_level
 
-    # ===== 初期化 =====
+# ===== ゲーム本体 =====
+async def play_game(max_player_hp, cp_level):
+    player_hp = max_player_hp
     player=pygame.Rect(WIDTH//2-25, HEIGHT-150,50,50)
     enemy=pygame.Rect(WIDTH//2-25,50,50,50)
     player_bullets=[]
@@ -112,37 +123,28 @@ async def main():
     enemy_hp=3+cp_level*2
     max_enemy_hp=enemy_hp
 
-    # ===== 操作ボタン =====
     left_btn = pygame.Rect(30, HEIGHT-120, 80, 80)
     right_btn = pygame.Rect(130, HEIGHT-120, 80, 80)
     shoot_btn = pygame.Rect(WIDTH-110, HEIGHT-120, 80, 80)
 
     running=True
-    # タッチ管理リスト（スマホ用）
-    active_touches = []
-
     while running:
         clock.tick(60)
         screen.fill(BLACK)
 
-        # ===== 入力処理（PC・スマホ共通） =====
+        # ===== 入力 =====
         moving_left = moving_right = shooting = False
-
-        # PCマウス判定
         mouse_pressed = pygame.mouse.get_pressed()
         if mouse_pressed[0]:
-            mx, my = pygame.mouse.get_pos()
+            mx,my = pygame.mouse.get_pos()
             if left_btn.collidepoint((mx,my)): moving_left = True
             if right_btn.collidepoint((mx,my)): moving_right = True
             if shoot_btn.collidepoint((mx,my)): shooting = True
 
-        # イベント処理（スマホタッチ用）
         for e in pygame.event.get():
-            if e.type==pygame.QUIT:
-                running=False
-            # タッチ開始または移動
+            if e.type==pygame.QUIT: running=False
             if e.type in [pygame.FINGERDOWN, pygame.FINGERMOTION]:
-                tx, ty = e.x*WIDTH, e.y*HEIGHT
+                tx,ty = e.x*WIDTH, e.y*HEIGHT
                 if left_btn.collidepoint((tx,ty)): moving_left = True
                 if right_btn.collidepoint((tx,ty)): moving_right = True
                 if shoot_btn.collidepoint((tx,ty)): shooting = True
@@ -151,14 +153,13 @@ async def main():
         if moving_left: player.x -= 5
         if moving_right: player.x += 5
         if shooting:
-            player_bullets.append(pygame.Rect(player.centerx-5, player.y,10,10))
-        player.x = max(0,min(WIDTH-player.width,player.x))
+            player_bullets.append(pygame.Rect(player.centerx-5, player.y, 10, 10))
+        player.x = max(0, min(WIDTH-player.width, player.x))
 
-        # ===== 敵追跡と射撃 =====
+        # ===== 敵操作 =====
         dx = player.centerx - enemy.centerx
         direction = dx / abs(dx) if dx != 0 else 0
-        tracking_speed = cp_levels[cp_level]["speed"]
-        enemy.x += direction * tracking_speed
+        enemy.x += direction * cp_levels[cp_level]["speed"]
         enemy.x = max(0, min(WIDTH-enemy.width,enemy.x))
         if random.randint(0, cp_levels[cp_level]["shoot_rate"])==0:
             enemy_bullets.append(pygame.Rect(enemy.centerx-5, enemy.bottom, 10,10))
@@ -206,12 +207,24 @@ async def main():
         screen.blit(font_small.render("SHOOT",True,WHITE),(shoot_btn.x+5,shoot_btn.y+25))
 
         # 勝敗
-        if player_hp<=0: print("LOSE"); running=False
-        if enemy_hp<=0: print("WIN"); running=False
+        if player_hp <= 0:
+            show_message("GAME OVER")
+            return "LOSE"
+        if enemy_hp <= 0:
+            show_message("GAME CLEAR")
+            return "WIN"
 
         pygame.display.flip()
         await asyncio.sleep(0)
 
-    pygame.quit()
+# ===== メインループ =====
+async def main():
+    while True:
+        max_player_hp, _ = await select_difficulty()
+        if max_player_hp is None: break
+        cp_level = await select_cp_level()
+        if cp_level is None: break
+        await play_game(max_player_hp, cp_level)
 
 asyncio.run(main())
+pygame.quit()
