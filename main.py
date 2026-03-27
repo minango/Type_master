@@ -47,15 +47,19 @@ class Button:
     def is_clicked(self,pos):
         return self.rect.collidepoint(pos)
 
-# ===== メッセージ表示 =====
-def show_message(text, duration=1.5):
+# ===== 非同期メッセージ表示 =====
+async def show_message(text, duration=1.5):
     end_time = pygame.time.get_ticks() + int(duration*1000)
     while pygame.time.get_ticks() < end_time:
         screen.fill(BLACK)
         screen.blit(font.render(text, True, WHITE),
                     font.render(text, True, WHITE).get_rect(center=(WIDTH//2, HEIGHT//2)))
         pygame.display.flip()
-        clock.tick(60)
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                return
+        await asyncio.sleep(0)
 
 # ===== 難易度選択 =====
 async def select_difficulty():
@@ -113,7 +117,7 @@ async def select_cp_level():
         await asyncio.sleep(0)
     return cp_level
 
-# ===== ゲーム本体 =====
+# ===== ゲーム本体（スマホ対応・弾1フレーム1発制限） =====
 async def play_game(max_player_hp, cp_level):
     player_hp = max_player_hp
     player=pygame.Rect(WIDTH//2-25, HEIGHT-150,50,50)
@@ -126,6 +130,10 @@ async def play_game(max_player_hp, cp_level):
     left_btn = pygame.Rect(30, HEIGHT-120, 80, 80)
     right_btn = pygame.Rect(130, HEIGHT-120, 80, 80)
     shoot_btn = pygame.Rect(WIDTH-110, HEIGHT-120, 80, 80)
+
+    # 発射制御
+    player_cooldown = 0
+    COOLDOWN_FRAMES = 30
 
     running=True
     while running:
@@ -152,9 +160,14 @@ async def play_game(max_player_hp, cp_level):
         # ===== プレイヤー操作 =====
         if moving_left: player.x -= 5
         if moving_right: player.x += 5
-        if shooting:
-            player_bullets.append(pygame.Rect(player.centerx-5, player.y, 10, 10))
         player.x = max(0, min(WIDTH-player.width, player.x))
+
+        # 弾撃ち（クールタイム制御）
+        if shooting and player_cooldown == 0:
+            player_bullets.append(pygame.Rect(player.centerx-5, player.y, 10, 10))
+            player_cooldown = COOLDOWN_FRAMES
+        if player_cooldown > 0:
+            player_cooldown -= 1
 
         # ===== 敵操作 =====
         dx = player.centerx - enemy.centerx
@@ -168,14 +181,14 @@ async def play_game(max_player_hp, cp_level):
         for b in player_bullets: b.y -= 7
         for b in enemy_bullets: b.y += 7
 
-        # 弾同士
+        # 弾同士衝突
         for pb in player_bullets[:]:
             for eb in enemy_bullets[:]:
                 if pb.colliderect(eb):
                     player_bullets.remove(pb)
                     enemy_bullets.remove(eb)
                     break
-        # 弾とキャラ
+        # 弾とキャラ衝突
         for b in enemy_bullets[:]:
             if player.colliderect(b):
                 enemy_bullets.remove(b)
@@ -206,12 +219,12 @@ async def play_game(max_player_hp, cp_level):
         screen.blit(font_small.render("R",True,WHITE),(right_btn.x+30,right_btn.y+25))
         screen.blit(font_small.render("SHOOT",True,WHITE),(shoot_btn.x+5,shoot_btn.y+25))
 
-        # 勝敗
+        # 勝敗判定
         if player_hp <= 0:
-            show_message("GAME OVER")
+            await show_message("GAME OVER")
             return "LOSE"
         if enemy_hp <= 0:
-            show_message("GAME CLEAR")
+            await show_message("GAME CLEAR")
             return "WIN"
 
         pygame.display.flip()
