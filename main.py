@@ -255,8 +255,10 @@ async def main():
 
             er = enemy_hp/max_enemy_hp
             ec = RED if er>0.33 else (YELLOW if er>0.1 else (RED if pygame.time.get_ticks()%400<200 else BLACK))
-            pygame.draw.rect(screen, WHITE, (x,40,200,20),2)
-            pygame.draw.rect(screen, ec, (x,40,200*er,20))
+            y_enemy = 10
+
+            pygame.draw.rect(screen, WHITE, (x, y_enemy, 200, 20), 2)
+            pygame.draw.rect(screen, ec, (x, y_enemy, 200 * er, 20))
 
             pr = player_hp/max_player_hp
             pc = BLUE if pr>0.33 else (YELLOW if pr>0.1 else (RED if pygame.time.get_ticks()%400<200 else BLACK))
