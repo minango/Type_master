@@ -141,12 +141,15 @@ async def main():
         enemy_hp=3+cp_level*2
         max_enemy_hp=enemy_hp
 
+        # ⏱ スコア用
+        start_time = pygame.time.get_ticks()
+
         left_btn = pygame.Rect(30, HEIGHT-120, 80, 80)
         right_btn = pygame.Rect(130, HEIGHT-120, 80, 80)
         shoot_btn = pygame.Rect(WIDTH-110, HEIGHT-120, 80, 80)
 
         shoot_cooldown = 0
-        cooldown_time = 30
+        cooldown_time = 30  # 約0.5秒
 
         active_touches={}
 
@@ -207,19 +210,34 @@ async def main():
                     enemy_hp-=1
                     explosions.append([enemy.centerx, enemy.centery, 10])
 
-            # ===== 結果 =====
+            # ===== 終了 =====
             if player_hp<=0 or enemy_hp<=0:
-                result = "WIN" if enemy_hp<=0 else "LOSE"
+
+                end_time = pygame.time.get_ticks()
+                time_sec = (end_time - start_time) / 1000
+
+                result = "WIN" if enemy_hp <= 0 else "LOSE"
+
+                if result == "WIN":
+                    base_score = max(1, int(10000 / time_sec))
+                    level_bonus = (cp_level + 1) * 500
+                    score = base_score + level_bonus
+                    score = (score // 1000) * 1000
+                else:
+                    score = 0
 
                 waiting = True
                 while waiting:
                     screen.fill(BLACK)
 
                     t = font_small.render(result, True, WHITE)
-                    screen.blit(t, t.get_rect(center=(WIDTH//2, HEIGHT//2-30)))
+                    screen.blit(t, t.get_rect(center=(WIDTH//2, HEIGHT//2-50)))
+
+                    s = font_small.render(f"Score: {score}", True, WHITE)
+                    screen.blit(s, s.get_rect(center=(WIDTH//2, HEIGHT//2)))
 
                     t2 = font_small.render("Tap to Retry", True, WHITE)
-                    screen.blit(t2, t2.get_rect(center=(WIDTH//2, HEIGHT//2+20)))
+                    screen.blit(t2, t2.get_rect(center=(WIDTH//2, HEIGHT//2+40)))
 
                     pygame.display.flip()
 
@@ -250,16 +268,16 @@ async def main():
                 if exp[2]>30:
                     explosions.remove(exp)
 
-            # HPバー
             x = (WIDTH-200)//2
 
+            # 敵HP（上に）
+            y_enemy = 10
             er = enemy_hp/max_enemy_hp
             ec = RED if er>0.33 else (YELLOW if er>0.1 else (RED if pygame.time.get_ticks()%400<200 else BLACK))
-            y_enemy = 10
+            pygame.draw.rect(screen, WHITE, (x,y_enemy,200,20),2)
+            pygame.draw.rect(screen, ec, (x,y_enemy,200*er,20))
 
-            pygame.draw.rect(screen, WHITE, (x, y_enemy, 200, 20), 2)
-            pygame.draw.rect(screen, ec, (x, y_enemy, 200 * er, 20))
-
+            # プレイヤーHP（一番下）
             pr = player_hp/max_player_hp
             pc = BLUE if pr>0.33 else (YELLOW if pr>0.1 else (RED if pygame.time.get_ticks()%400<200 else BLACK))
             pygame.draw.rect(screen, WHITE, (x,HEIGHT-40,200,20),2)
