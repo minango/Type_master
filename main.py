@@ -15,6 +15,7 @@ BLACK = (0,0,0)
 GREEN = (0,180,0)
 GRAY = (100,100,100)
 YELLOW = (255,255,0)
+PURPLE = (180,0,255)
 
 font_small = pygame.font.SysFont(None,28)
 
@@ -44,23 +45,22 @@ class Button:
 
 async def main():
 
-    # ===== スタート =====
-    waiting = True
-    while waiting:
+    while True:
         screen.fill(BLACK)
         t = font_small.render("Tap to Start", True, WHITE)
         screen.blit(t, t.get_rect(center=(WIDTH//2, HEIGHT//2)))
         pygame.display.flip()
 
-        for e in pygame.event.get():
-            if e.type == pygame.QUIT:
-                return
-            if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
-                waiting = False
+        start = False
+        active_touches = {}
 
-        await asyncio.sleep(0)
-
-    while True:
+        while not start:
+            for e in pygame.event.get():
+                if e.type == pygame.QUIT: return
+                if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
+                    start = True
+                    active_touches.clear()
+            await asyncio.sleep(0)
 
         # ===== 難易度 =====
         buttons = [
@@ -80,24 +80,16 @@ async def main():
             pygame.display.flip()
 
             for e in pygame.event.get():
-                if e.type==pygame.QUIT:
-                    return
-
-                if e.type == pygame.FINGERDOWN:
-                    pos=(e.x*WIDTH,e.y*HEIGHT)
-                elif e.type == pygame.MOUSEBUTTONDOWN:
-                    pos=e.pos
-                else:
-                    continue
-
-                for b in buttons:
-                    if b.rect.collidepoint(pos):
-                        if b.text=="Easy": max_player_hp=20
-                        elif b.text=="Normal": max_player_hp=10
-                        elif b.text=="Hard": max_player_hp=5
-                        elif b.text=="Ultra": max_player_hp=1
-                        selecting=False
-
+                if e.type==pygame.QUIT: return
+                if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
+                    pos = (e.x*WIDTH,e.y*HEIGHT) if e.type==pygame.FINGERDOWN else e.pos
+                    for b in buttons:
+                        if b.rect.collidepoint(pos):
+                            if b.text=="Easy": max_player_hp=20
+                            elif b.text=="Normal": max_player_hp=10
+                            elif b.text=="Hard": max_player_hp=5
+                            elif b.text=="Ultra": max_player_hp=1
+                            selecting=False
             await asyncio.sleep(0)
 
         # ===== ステージ =====
@@ -112,21 +104,13 @@ async def main():
             pygame.display.flip()
 
             for e in pygame.event.get():
-                if e.type==pygame.QUIT:
-                    return
-
-                if e.type == pygame.FINGERDOWN:
-                    pos=(e.x*WIDTH,e.y*HEIGHT)
-                elif e.type == pygame.MOUSEBUTTONDOWN:
-                    pos=e.pos
-                else:
-                    continue
-
-                for i,b in enumerate(level_buttons):
-                    if b.rect.collidepoint(pos):
-                        cp_level=i
-                        selecting=False
-
+                if e.type==pygame.QUIT: return
+                if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
+                    pos = (e.x*WIDTH,e.y*HEIGHT) if e.type==pygame.FINGERDOWN else e.pos
+                    for i,b in enumerate(level_buttons):
+                        if b.rect.collidepoint(pos):
+                            cp_level=i
+                            selecting=False
             await asyncio.sleep(0)
 
         # ===== ゲーム =====
@@ -143,25 +127,42 @@ async def main():
 
         start_time = pygame.time.get_ticks()
 
-        left_btn = pygame.Rect(30, HEIGHT-120, 80, 80)
-        right_btn = pygame.Rect(130, HEIGHT-120, 80, 80)
-        shoot_btn = pygame.Rect(WIDTH-110, HEIGHT-120, 80, 80)
+        left_btn = pygame.Rect(30, HEIGHT-160, 80, 80)
+        right_btn = pygame.Rect(130, HEIGHT-160, 80, 80)
+        shoot_btn = pygame.Rect(WIDTH-110, HEIGHT-160, 80, 80)
+        special_btn = pygame.Rect(WIDTH-110, HEIGHT-250, 80, 60)
 
         shoot_cooldown = 0
         cooldown_time = 30
 
+        special_gauge = 0
+        special_timer = 0
+
+        combo = 0
+        combo_timer = 0
+
+        shake_timer = 0
+
         active_touches={}
 
         running=True
+        result=None
+
         while running:
             clock.tick(60)
             screen.fill(BLACK)
 
-            moving_left = moving_right = shooting = False
+            # 揺れ
+            if shake_timer > 0:
+                offset = random.randint(-3,3)
+                shake_timer -= 1
+            else:
+                offset = 0
+
+            moving_left = moving_right = shooting = special = False
 
             for e in pygame.event.get():
-                if e.type==pygame.QUIT:
-                    return
+                if e.type==pygame.QUIT: return
                 if e.type in (pygame.FINGERDOWN, pygame.FINGERMOTION):
                     active_touches[e.finger_id]=(e.x,e.y)
                 if e.type==pygame.FINGERUP:
@@ -172,140 +173,160 @@ async def main():
                 if left_btn.collidepoint((x,y)): moving_left=True
                 if right_btn.collidepoint((x,y)): moving_right=True
                 if shoot_btn.collidepoint((x,y)): shooting=True
+                if special_btn.collidepoint((x,y)): special=True
 
-            if shoot_cooldown>0:
-                shoot_cooldown-=1
+            if shoot_cooldown>0: shoot_cooldown-=1
+
+            special_timer += 1
+            if special_timer >= 60:
+                special_timer = 0
+                special_gauge = min(20, special_gauge + 1)
 
             if moving_left: player.x-=5
             if moving_right: player.x+=5
 
             if shooting and shoot_cooldown==0:
-                player_bullets.append(pygame.Rect(player.centerx-5, player.y,10,10))
+                player_bullets.append({"rect":pygame.Rect(player.centerx-5, player.y,10,10),"power":1+combo})
                 shoot_cooldown=cooldown_time
+
+            if special and special_gauge >= 20:
+                player_bullets.append({"rect":pygame.Rect(player.centerx-15, player.y,30,30),"power":3+combo,"pierce":True})
+                special_gauge = 0
 
             player.x = max(0,min(WIDTH-player.width,player.x))
 
             dx = player.centerx-enemy.centerx
             direction = dx/abs(dx) if dx!=0 else 0
             enemy.x += direction*cp_levels[cp_level]["speed"]
-            enemy.x = max(0,min(WIDTH-enemy.width,enemy.x))
 
             if random.randint(0,cp_levels[cp_level]["shoot_rate"])==0:
                 enemy_bullets.append(pygame.Rect(enemy.centerx-5,enemy.bottom,10,10))
 
-            for b in player_bullets: b.y-=7
-            for b in enemy_bullets: b.y+=7
+            for b in player_bullets:
+                b["rect"].y-=7
+            for b in enemy_bullets:
+                b.y+=7
 
-            # 衝突
             for b in enemy_bullets[:]:
                 if player.colliderect(b):
                     enemy_bullets.remove(b)
                     player_hp-=1
-                    explosions.append([player.centerx, player.centery, 10])
+                    shake_timer = 5
+                    explosions.append([player.centerx, player.centery, 5])
 
             for b in player_bullets[:]:
-                if enemy.colliderect(b):
-                    player_bullets.remove(b)
-                    enemy_hp-=1
-                    explosions.append([enemy.centerx, enemy.centery, 10])
+                if enemy.colliderect(b["rect"]):
+                    if not b.get("pierce"):
+                        player_bullets.remove(b)
+                    enemy_hp -= b["power"]
+                    shake_timer = 3
+                    explosions.append([enemy.centerx, enemy.centery, 5])
+                    special_gauge = min(20, special_gauge + 1)
 
-            # ===== 終了 =====
-            if player_hp<=0 or enemy_hp<=0:
+                    combo += 1
+                    combo_timer = 300
 
-                end_time = pygame.time.get_ticks()
-                time_sec = max(0.1, (end_time - start_time) / 1000)
+            if combo_timer > 0:
+                combo_timer -= 1
+            else:
+                combo = 0
 
-                result = "WIN" if enemy_hp<=0 else "LOSE"
+            if player_hp<=0:
+                result="LOSE"
+                running=False
+            if enemy_hp<=0:
+                result="WIN"
+                running=False
 
-                if result == "WIN":
-                    base_score = int(30000 / time_sec)
-                    level_bonus = (cp_level + 1) * 5000
-                    score = base_score + level_bonus
-                else:
-                    score = 0
-
-                retry_btn = pygame.Rect(WIDTH//2-80, HEIGHT//2+30, 160, 50)
-
-                waiting = True
-                while waiting:
-                    screen.fill(BLACK)
-
-                    t = font_small.render(result, True, WHITE)
-                    screen.blit(t, t.get_rect(center=(WIDTH//2, HEIGHT//2-50)))
-
-                    s = font_small.render(f"Score: {score}", True, WHITE)
-                    screen.blit(s, s.get_rect(center=(WIDTH//2, HEIGHT//2)))
-
-                    pygame.draw.rect(screen, GREEN, retry_btn)
-                    pygame.draw.rect(screen, WHITE, retry_btn, 2)
-                    t2 = font_small.render("RETRY", True, WHITE)
-                    screen.blit(t2, t2.get_rect(center=retry_btn.center))
-
-                    pygame.display.flip()
-
-                    for e in pygame.event.get():
-                        if e.type==pygame.QUIT:
-                            return
-
-                        if e.type == pygame.FINGERDOWN:
-                            pos=(e.x*WIDTH,e.y*HEIGHT)
-                        elif e.type == pygame.MOUSEBUTTONDOWN:
-                            pos=e.pos
-                        else:
-                            continue
-
-                        if retry_btn.collidepoint(pos):
-                            waiting=False
-
-                    await asyncio.sleep(0)
-
-                break
-
-            # ===== 描画 =====
-            pygame.draw.rect(screen, BLUE, player)
-            pygame.draw.rect(screen, RED, enemy)
+            # 描画
+            pygame.draw.rect(screen, BLUE, player.move(offset,0))
+            pygame.draw.rect(screen, RED, enemy.move(offset,0))
 
             for b in player_bullets:
-                pygame.draw.rect(screen, WHITE, b)
+                color = PURPLE if b.get("pierce") else WHITE
+                pygame.draw.rect(screen, color, b["rect"].move(offset,0))
+
             for b in enemy_bullets:
-                pygame.draw.rect(screen, WHITE, b)
+                pygame.draw.rect(screen, WHITE, b.move(offset,0))
 
             # 爆発
             for exp in explosions[:]:
-                pygame.draw.circle(screen, (255,200,0), (exp[0],exp[1]), exp[2])
-                pygame.draw.circle(screen, (255,100,0), (exp[0],exp[1]), exp[2]//2)
+                pygame.draw.circle(screen, (255,200,0), (exp[0]+offset,exp[1]), exp[2])
+                pygame.draw.circle(screen, (255,100,0), (exp[0]+offset,exp[1]), exp[2]//2)
                 exp[2]+=2
-                if exp[2]>30:
+                if exp[2]>20:
                     explosions.remove(exp)
 
+            # HPバー
             x = (WIDTH-200)//2
+            pygame.draw.rect(screen, WHITE, (x,10,200,20),2)
+            pygame.draw.rect(screen, RED, (x,10,200*(enemy_hp/max_enemy_hp),20))
 
-            # 敵HP
-            y_enemy = 10
-            er = enemy_hp/max_enemy_hp
-            ec = RED if er>0.33 else (YELLOW if er>0.1 else (RED if pygame.time.get_ticks()%400<200 else BLACK))
-            pygame.draw.rect(screen, WHITE, (x,y_enemy,200,20),2)
-            pygame.draw.rect(screen, ec, (x,y_enemy,200*er,20))
-
-            # プレイヤーHP
-            pr = player_hp/max_player_hp
-            pc = BLUE if pr>0.33 else (YELLOW if pr>0.1 else (RED if pygame.time.get_ticks()%400<200 else BLACK))
             pygame.draw.rect(screen, WHITE, (x,HEIGHT-40,200,20),2)
-            pygame.draw.rect(screen, pc, (x,HEIGHT-40,200*pr,20))
+            pygame.draw.rect(screen, BLUE, (x,HEIGHT-40,200*(player_hp/max_player_hp),20))
+
+            # SPゲージ
+            pygame.draw.rect(screen, WHITE, (WIDTH-110, HEIGHT-300, 80, 10), 2)
+            pygame.draw.rect(screen, YELLOW, (WIDTH-110, HEIGHT-300, 80*(special_gauge/20), 10))
 
             # ボタン
             pygame.draw.rect(screen, GREEN, left_btn)
             pygame.draw.rect(screen, GREEN, right_btn)
-            pygame.draw.rect(screen, GRAY if shoot_cooldown>0 else RED, shoot_btn)
+            pygame.draw.rect(screen, RED, shoot_btn)
+            pygame.draw.rect(screen, YELLOW if special_gauge>=20 else GRAY, special_btn)
 
-            screen.blit(font_small.render("L",True,WHITE),
-                        font_small.render("L",True,WHITE).get_rect(center=left_btn.center))
-            screen.blit(font_small.render("R",True,WHITE),
-                        font_small.render("R",True,WHITE).get_rect(center=right_btn.center))
-            screen.blit(font_small.render("SHOOT",True,WHITE),
-                        font_small.render("SHOOT",True,WHITE).get_rect(center=shoot_btn.center))
+            screen.blit(font_small.render("L",True,WHITE), font_small.render("L",True,WHITE).get_rect(center=left_btn.center))
+            screen.blit(font_small.render("R",True,WHITE), font_small.render("R",True,WHITE).get_rect(center=right_btn.center))
+            screen.blit(font_small.render("SHOOT",True,WHITE), font_small.render("SHOOT",True,WHITE).get_rect(center=shoot_btn.center))
+            screen.blit(font_small.render("SP",True,WHITE), font_small.render("SP",True,WHITE).get_rect(center=special_btn.center))
+
+            # タイム
+            time_sec = (pygame.time.get_ticks() - start_time) / 1000
+            screen.blit(font_small.render(f"{time_sec:.2f}s",True,WHITE),(10,10))
+
+            if combo > 0:
+                screen.blit(font_small.render(f"{combo} COMBO",True,YELLOW),(WIDTH//2-50,100))
 
             pygame.display.flip()
+            await asyncio.sleep(0)
+
+        # ===== 結果 =====
+        end_time = pygame.time.get_ticks()
+        time_sec = (end_time - start_time) / 1000
+
+        if result == "WIN":
+            score = int((15000 / time_sec) * (1 + cp_level * 0.4))
+        else:
+            score = 0
+
+        retry_btn = Button((140,500,200,60),GREEN,"RETRY")
+
+        waiting=True
+        active_touches.clear()
+
+        while waiting:
+            screen.fill(BLACK)
+
+            t1 = font_small.render(result,True,WHITE)
+            t2 = font_small.render(f"TIME: {time_sec:.2f}s",True,WHITE)
+            t3 = font_small.render(f"SCORE: {score}",True,WHITE)
+
+            screen.blit(t1, t1.get_rect(center=(WIDTH//2,200)))
+            screen.blit(t2, t2.get_rect(center=(WIDTH//2,260)))
+            screen.blit(t3, t3.get_rect(center=(WIDTH//2,320)))
+
+            retry_btn.draw(screen)
+
+            pygame.display.flip()
+
+            for e in pygame.event.get():
+                if e.type==pygame.QUIT: return
+                if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
+                    pos = (e.x*WIDTH,e.y*HEIGHT) if e.type==pygame.FINGERDOWN else e.pos
+                    if retry_btn.rect.collidepoint(pos):
+                        active_touches.clear()
+                        waiting=False
+
             await asyncio.sleep(0)
 
 asyncio.run(main())
