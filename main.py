@@ -211,13 +211,13 @@ async def main():
                 b.y+=7
 
             # ★ 相殺
+            # 相殺（エフェクトなし）
             for pb in player_bullets[:]:
                 for eb in enemy_bullets[:]:
                     if pb["rect"].colliderect(eb):
                         if not pb.get("pierce"):
                             player_bullets.remove(pb)
                         enemy_bullets.remove(eb)
-                        explosions.append([pb["rect"].centerx, pb["rect"].centery, 5])
                         break
 
             # 衝突
