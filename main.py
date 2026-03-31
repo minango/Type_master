@@ -62,7 +62,7 @@ async def main():
                     active_touches.clear()
             await asyncio.sleep(0)
 
-        # ===== 難易度 =====
+        # 難易度
         buttons = [
             Button((60,200,120,50),GREEN,"Easy"),
             Button((200,200,120,50),BLUE,"Normal"),
@@ -92,7 +92,7 @@ async def main():
                             selecting=False
             await asyncio.sleep(0)
 
-        # ===== ステージ =====
+        # ステージ
         level_buttons=[Button((20+i*45,350,40,40),(0,255-20*i,255),str(i+1)) for i in range(10)]
         selecting=True
         cp_level=0
@@ -113,7 +113,7 @@ async def main():
                             selecting=False
             await asyncio.sleep(0)
 
-        # ===== ゲーム =====
+        # ゲーム
         player=pygame.Rect(WIDTH//2-25, HEIGHT-260,50,50)
         enemy=pygame.Rect(WIDTH//2-25,50,50,50)
 
@@ -142,6 +142,7 @@ async def main():
         combo_timer = 0
 
         shake_timer = 0
+        blink_timer = 0
 
         active_touches={}
 
@@ -151,6 +152,8 @@ async def main():
         while running:
             clock.tick(60)
             screen.fill(BLACK)
+
+            blink_timer += 1
 
             # 揺れ
             if shake_timer > 0:
@@ -207,18 +210,17 @@ async def main():
             for b in enemy_bullets:
                 b.y+=7
 
-                # 弾同士の相殺
-                for pb in player_bullets[:]:
-                    for eb in enemy_bullets[:]:
-                        if pb["rect"].colliderect(eb):
-                            if not pb.get("pierce"):  # 貫通弾は消えない
-                                player_bullets.remove(pb)
-                            enemy_bullets.remove(eb)
+            # ★ 相殺
+            for pb in player_bullets[:]:
+                for eb in enemy_bullets[:]:
+                    if pb["rect"].colliderect(eb):
+                        if not pb.get("pierce"):
+                            player_bullets.remove(pb)
+                        enemy_bullets.remove(eb)
+                        explosions.append([pb["rect"].centerx, pb["rect"].centery, 5])
+                        break
 
-                            # 爆発エフェクト
-                            explosions.append([pb["rect"].centerx, pb["rect"].centery, 5])
-                            break
-
+            # 衝突
             for b in enemy_bullets[:]:
                 if player.colliderect(b):
                     enemy_bullets.remove(b)
@@ -269,13 +271,39 @@ async def main():
                 if exp[2]>20:
                     explosions.remove(exp)
 
-            # HPバー
+            # ===== HPバー色変化 =====
+            def get_hp_color(hp, max_hp):
+                ratio = hp / max_hp
+                if ratio < 0.2:
+                    # 点滅
+                    if blink_timer % 20 < 10:
+                        return RED
+                    else:
+                        return BLACK
+                elif ratio < 0.4:
+                    return YELLOW
+                else:
+                    return RED
+
+            def get_player_color(hp, max_hp):
+                ratio = hp / max_hp
+                if ratio < 0.2:
+                    if blink_timer % 20 < 10:
+                        return RED
+                    else:
+                        return BLACK
+                elif ratio < 0.4:
+                    return YELLOW
+                else:
+                    return BLUE
+
             x = (WIDTH-200)//2
+
             pygame.draw.rect(screen, WHITE, (x,10,200,20),2)
-            pygame.draw.rect(screen, RED, (x,10,200*(enemy_hp/max_enemy_hp),20))
+            pygame.draw.rect(screen, get_hp_color(enemy_hp,max_enemy_hp), (x,10,200*(enemy_hp/max_enemy_hp),20))
 
             pygame.draw.rect(screen, WHITE, (x,HEIGHT-40,200,20),2)
-            pygame.draw.rect(screen, BLUE, (x,HEIGHT-40,200*(player_hp/max_player_hp),20))
+            pygame.draw.rect(screen, get_player_color(player_hp,max_player_hp), (x,HEIGHT-40,200*(player_hp/max_player_hp),20))
 
             # SPゲージ
             pygame.draw.rect(screen, WHITE, (WIDTH-110, HEIGHT-300, 80, 10), 2)
@@ -292,7 +320,6 @@ async def main():
             screen.blit(font_small.render("SHOOT",True,WHITE), font_small.render("SHOOT",True,WHITE).get_rect(center=shoot_btn.center))
             screen.blit(font_small.render("SP",True,WHITE), font_small.render("SP",True,WHITE).get_rect(center=special_btn.center))
 
-            # タイム
             time_sec = (pygame.time.get_ticks() - start_time) / 1000
             screen.blit(font_small.render(f"{time_sec:.2f}s",True,WHITE),(10,10))
 
