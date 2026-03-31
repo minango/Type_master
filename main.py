@@ -155,7 +155,6 @@ async def main():
 
             blink_timer += 1
 
-            # 揺れ
             if shake_timer > 0:
                 offset = random.randint(-3,3)
                 shake_timer -= 1
@@ -192,8 +191,14 @@ async def main():
                 player_bullets.append({"rect":pygame.Rect(player.centerx-5, player.y,10,10),"power":1+combo})
                 shoot_cooldown=cooldown_time
 
+            # ★修正①（ここ）
             if special and special_gauge >= 20:
-                player_bullets.append({"rect":pygame.Rect(player.centerx-15, player.y,30,30),"power":3+combo,"pierce":True})
+                player_bullets.append({
+                    "rect":pygame.Rect(player.centerx-15, player.y,30,30),
+                    "power":3,
+                    "pierce":True,
+                    "hit_enemy":False
+                })
                 special_gauge = 0
 
             player.x = max(0,min(WIDTH-player.width,player.x))
@@ -210,8 +215,7 @@ async def main():
             for b in enemy_bullets:
                 b.y+=7
 
-            # ★ 相殺
-            # 相殺（エフェクトなし）
+            # 相殺
             for pb in player_bullets[:]:
                 for eb in enemy_bullets[:]:
                     if pb["rect"].colliderect(eb):
@@ -220,25 +224,31 @@ async def main():
                         enemy_bullets.remove(eb)
                         break
 
-            # 衝突
+            # ★修正②（ここ）
+            for b in player_bullets[:]:
+                if enemy.colliderect(b["rect"]):
+
+                    if b.get("pierce"):
+                        if b.get("hit_enemy"):
+                            continue
+                        b["hit_enemy"] = True
+
+                    enemy_hp -= b["power"]
+                    shake_timer = 3
+                    explosions.append([enemy.centerx, enemy.centery, 5])
+
+                    if not b.get("pierce"):
+                        player_bullets.remove(b)
+
+                    combo += 1
+                    combo_timer = 300
+
             for b in enemy_bullets[:]:
                 if player.colliderect(b):
                     enemy_bullets.remove(b)
                     player_hp-=1
                     shake_timer = 5
                     explosions.append([player.centerx, player.centery, 5])
-
-            for b in player_bullets[:]:
-                if enemy.colliderect(b["rect"]):
-                    if not b.get("pierce"):
-                        player_bullets.remove(b)
-                    enemy_hp -= b["power"]
-                    shake_timer = 3
-                    explosions.append([enemy.centerx, enemy.centery, 5])
-                    special_gauge = min(20, special_gauge + 1)
-
-                    combo += 1
-                    combo_timer = 300
 
             if combo_timer > 0:
                 combo_timer -= 1
@@ -252,7 +262,6 @@ async def main():
                 result="WIN"
                 running=False
 
-            # 描画
             pygame.draw.rect(screen, BLUE, player.move(offset,0))
             pygame.draw.rect(screen, RED, enemy.move(offset,0))
 
@@ -263,7 +272,6 @@ async def main():
             for b in enemy_bullets:
                 pygame.draw.rect(screen, WHITE, b.move(offset,0))
 
-            # 爆発
             for exp in explosions[:]:
                 pygame.draw.circle(screen, (255,200,0), (exp[0]+offset,exp[1]), exp[2])
                 pygame.draw.circle(screen, (255,100,0), (exp[0]+offset,exp[1]), exp[2]//2)
@@ -271,15 +279,10 @@ async def main():
                 if exp[2]>20:
                     explosions.remove(exp)
 
-            # ===== HPバー色変化 =====
             def get_hp_color(hp, max_hp):
                 ratio = hp / max_hp
                 if ratio < 0.2:
-                    # 点滅
-                    if blink_timer % 20 < 10:
-                        return RED
-                    else:
-                        return BLACK
+                    return RED if blink_timer % 20 < 10 else BLACK
                 elif ratio < 0.4:
                     return YELLOW
                 else:
@@ -288,10 +291,7 @@ async def main():
             def get_player_color(hp, max_hp):
                 ratio = hp / max_hp
                 if ratio < 0.2:
-                    if blink_timer % 20 < 10:
-                        return RED
-                    else:
-                        return BLACK
+                    return RED if blink_timer % 20 < 10 else BLACK
                 elif ratio < 0.4:
                     return YELLOW
                 else:
@@ -305,11 +305,9 @@ async def main():
             pygame.draw.rect(screen, WHITE, (x,HEIGHT-40,200,20),2)
             pygame.draw.rect(screen, get_player_color(player_hp,max_player_hp), (x,HEIGHT-40,200*(player_hp/max_player_hp),20))
 
-            # SPゲージ
             pygame.draw.rect(screen, WHITE, (WIDTH-110, HEIGHT-300, 80, 10), 2)
             pygame.draw.rect(screen, YELLOW, (WIDTH-110, HEIGHT-300, 80*(special_gauge/20), 10))
 
-            # ボタン
             pygame.draw.rect(screen, GREEN, left_btn)
             pygame.draw.rect(screen, GREEN, right_btn)
             pygame.draw.rect(screen, RED, shoot_btn)
@@ -329,12 +327,11 @@ async def main():
             pygame.display.flip()
             await asyncio.sleep(0)
 
-        # ===== 結果 =====
         end_time = pygame.time.get_ticks()
         time_sec = (end_time - start_time) / 1000
 
         if result == "WIN":
-            score = int((15000 / time_sec) * (1 + cp_level * 0.4))
+            score = int((30000 / (time_sec + 1)) * ((cp_level + 1) ** 1.5))
         else:
             score = 0
 
