@@ -32,6 +32,9 @@ cp_levels = [
     {"shoot_rate":3,"speed":12},
 ]
 
+# ステージごとのベストスコア
+best_scores = [0]*10
+
 class Button:
     def __init__(self, rect, color, text):
         self.rect = pygame.Rect(rect)
@@ -45,7 +48,10 @@ class Button:
 
 async def main():
 
+    global best_scores
+
     while True:
+        # ===== スタート =====
         screen.fill(BLACK)
         t = font_small.render("Tap to Start", True, WHITE)
         screen.blit(t, t.get_rect(center=(WIDTH//2, HEIGHT//2)))
@@ -62,7 +68,7 @@ async def main():
                     active_touches.clear()
             await asyncio.sleep(0)
 
-        # 難易度
+        # ===== 難易度選択 =====
         buttons = [
             Button((60,200,120,50),GREEN,"Easy"),
             Button((200,200,120,50),BLUE,"Normal"),
@@ -92,7 +98,7 @@ async def main():
                             selecting=False
             await asyncio.sleep(0)
 
-        # ステージ
+        # ===== ステージ選択 =====
         level_buttons=[Button((20+i*45,350,40,40),(0,255-20*i,255),str(i+1)) for i in range(10)]
         selecting=True
         cp_level=0
@@ -113,7 +119,7 @@ async def main():
                             selecting=False
             await asyncio.sleep(0)
 
-        # ゲーム
+        # ===== ゲーム =====
         player=pygame.Rect(WIDTH//2-25, HEIGHT-260,50,50)
         enemy=pygame.Rect(WIDTH//2-25,50,50,50)
 
@@ -152,14 +158,10 @@ async def main():
         while running:
             clock.tick(60)
             screen.fill(BLACK)
-
             blink_timer += 1
 
-            if shake_timer > 0:
-                offset = random.randint(-3,3)
-                shake_timer -= 1
-            else:
-                offset = 0
+            offset = random.randint(-3,3) if shake_timer > 0 else 0
+            if shake_timer>0: shake_timer -= 1
 
             moving_left = moving_right = shooting = special = False
 
@@ -191,15 +193,9 @@ async def main():
                 player_bullets.append({"rect":pygame.Rect(player.centerx-5, player.y,10,10),"power":1+combo})
                 shoot_cooldown=cooldown_time
 
-            # ★修正①（ここ）
-            if special and special_gauge >= 20:
-                player_bullets.append({
-                    "rect":pygame.Rect(player.centerx-15, player.y,30,30),
-                    "power":3,
-                    "pierce":True,
-                    "hit_enemy":False
-                })
-                special_gauge = 0
+            if special and special_gauge>=20:
+                player_bullets.append({"rect":pygame.Rect(player.centerx-15,player.y,30,30),"power":3,"pierce":True,"hit_enemy":False})
+                special_gauge=0
 
             player.x = max(0,min(WIDTH-player.width,player.x))
 
@@ -210,10 +206,9 @@ async def main():
             if random.randint(0,cp_levels[cp_level]["shoot_rate"])==0:
                 enemy_bullets.append(pygame.Rect(enemy.centerx-5,enemy.bottom,10,10))
 
-            for b in player_bullets:
-                b["rect"].y-=7
-            for b in enemy_bullets:
-                b.y+=7
+            # 弾移動
+            for b in player_bullets: b["rect"].y-=7
+            for b in enemy_bullets: b.y+=7
 
             # 相殺
             for pb in player_bullets[:]:
@@ -224,36 +219,30 @@ async def main():
                         enemy_bullets.remove(eb)
                         break
 
-            # ★修正②（ここ）
+            # 敵ヒット
             for b in player_bullets[:]:
                 if enemy.colliderect(b["rect"]):
-
                     if b.get("pierce"):
-                        if b.get("hit_enemy"):
-                            continue
-                        b["hit_enemy"] = True
-
+                        if b.get("hit_enemy"): continue
+                        b["hit_enemy"]=True
                     enemy_hp -= b["power"]
-                    shake_timer = 3
-                    explosions.append([enemy.centerx, enemy.centery, 5])
-
+                    shake_timer=3
+                    explosions.append([enemy.centerx,enemy.centery,5])
                     if not b.get("pierce"):
                         player_bullets.remove(b)
-
                     combo += 1
                     combo_timer = 300
 
+            # プレイヤーヒット
             for b in enemy_bullets[:]:
                 if player.colliderect(b):
                     enemy_bullets.remove(b)
                     player_hp-=1
-                    shake_timer = 5
-                    explosions.append([player.centerx, player.centery, 5])
+                    shake_timer=5
+                    explosions.append([player.centerx,player.centery,5])
 
-            if combo_timer > 0:
-                combo_timer -= 1
-            else:
-                combo = 0
+            combo_timer = max(0, combo_timer-1)
+            if combo_timer==0: combo=0
 
             if player_hp<=0:
                 result="LOSE"
@@ -262,13 +251,13 @@ async def main():
                 result="WIN"
                 running=False
 
+            # 描画
             pygame.draw.rect(screen, BLUE, player.move(offset,0))
             pygame.draw.rect(screen, RED, enemy.move(offset,0))
 
             for b in player_bullets:
                 color = PURPLE if b.get("pierce") else WHITE
                 pygame.draw.rect(screen, color, b["rect"].move(offset,0))
-
             for b in enemy_bullets:
                 pygame.draw.rect(screen, WHITE, b.move(offset,0))
 
@@ -276,37 +265,27 @@ async def main():
                 pygame.draw.circle(screen, (255,200,0), (exp[0]+offset,exp[1]), exp[2])
                 pygame.draw.circle(screen, (255,100,0), (exp[0]+offset,exp[1]), exp[2]//2)
                 exp[2]+=2
-                if exp[2]>20:
-                    explosions.remove(exp)
+                if exp[2]>20: explosions.remove(exp)
 
-            def get_hp_color(hp, max_hp):
-                ratio = hp / max_hp
-                if ratio < 0.2:
-                    return RED if blink_timer % 20 < 10 else BLACK
-                elif ratio < 0.4:
-                    return YELLOW
-                else:
-                    return RED
+            def get_hp_color(hp,max_hp):
+                ratio = hp/max_hp
+                if ratio<0.2: return RED if blink_timer%20<10 else BLACK
+                elif ratio<0.4: return YELLOW
+                else: return RED
+            def get_player_color(hp,max_hp):
+                ratio = hp/max_hp
+                if ratio<0.2: return RED if blink_timer%20<10 else BLACK
+                elif ratio<0.4: return YELLOW
+                else: return BLUE
 
-            def get_player_color(hp, max_hp):
-                ratio = hp / max_hp
-                if ratio < 0.2:
-                    return RED if blink_timer % 20 < 10 else BLACK
-                elif ratio < 0.4:
-                    return YELLOW
-                else:
-                    return BLUE
+            x=(WIDTH-200)//2
+            pygame.draw.rect(screen, WHITE,(x,10,200,20),2)
+            pygame.draw.rect(screen, get_hp_color(enemy_hp,max_enemy_hp),(x,10,200*(enemy_hp/max_enemy_hp),20))
+            pygame.draw.rect(screen, WHITE,(x,HEIGHT-40,200,20),2)
+            pygame.draw.rect(screen, get_player_color(player_hp,max_player_hp),(x,HEIGHT-40,200*(player_hp/max_player_hp),20))
 
-            x = (WIDTH-200)//2
-
-            pygame.draw.rect(screen, WHITE, (x,10,200,20),2)
-            pygame.draw.rect(screen, get_hp_color(enemy_hp,max_enemy_hp), (x,10,200*(enemy_hp/max_enemy_hp),20))
-
-            pygame.draw.rect(screen, WHITE, (x,HEIGHT-40,200,20),2)
-            pygame.draw.rect(screen, get_player_color(player_hp,max_player_hp), (x,HEIGHT-40,200*(player_hp/max_player_hp),20))
-
-            pygame.draw.rect(screen, WHITE, (WIDTH-110, HEIGHT-300, 80, 10), 2)
-            pygame.draw.rect(screen, YELLOW, (WIDTH-110, HEIGHT-300, 80*(special_gauge/20), 10))
+            pygame.draw.rect(screen, WHITE,(WIDTH-110, HEIGHT-300, 80,10),2)
+            pygame.draw.rect(screen, YELLOW,(WIDTH-110, HEIGHT-300, 80*(special_gauge/20),10))
 
             pygame.draw.rect(screen, GREEN, left_btn)
             pygame.draw.rect(screen, GREEN, right_btn)
@@ -318,41 +297,40 @@ async def main():
             screen.blit(font_small.render("SHOOT",True,WHITE), font_small.render("SHOOT",True,WHITE).get_rect(center=shoot_btn.center))
             screen.blit(font_small.render("SP",True,WHITE), font_small.render("SP",True,WHITE).get_rect(center=special_btn.center))
 
-            time_sec = (pygame.time.get_ticks() - start_time) / 1000
+            time_sec = (pygame.time.get_ticks() - start_time)/1000
             screen.blit(font_small.render(f"{time_sec:.2f}s",True,WHITE),(10,10))
 
-            if combo > 0:
+            if combo>0:
                 screen.blit(font_small.render(f"{combo} COMBO",True,YELLOW),(WIDTH//2-50,100))
 
             pygame.display.flip()
             await asyncio.sleep(0)
 
+        # ===== 結果画面 =====
         end_time = pygame.time.get_ticks()
-        time_sec = (end_time - start_time) / 1000
+        time_sec = (end_time - start_time)/1000
 
-        if result == "WIN":
-            score = int((30000 / (time_sec + 1)) * ((cp_level + 1) ** 1.5))
+        if result=="WIN":
+            score = int((cp_level+1)**1.5 * 3000 / (time_sec + 1))
         else:
             score = 0
 
-        retry_btn = Button((140,500,200,60),GREEN,"RETRY")
+        # ベストスコア更新
+        if score > best_scores[cp_level]:
+            best_scores[cp_level] = score
 
+        retry_btn = Button((140,500,200,60),GREEN,"RETRY")
         waiting=True
         active_touches.clear()
 
         while waiting:
             screen.fill(BLACK)
-
-            t1 = font_small.render(result,True,WHITE)
-            t2 = font_small.render(f"TIME: {time_sec:.2f}s",True,WHITE)
-            t3 = font_small.render(f"SCORE: {score}",True,WHITE)
-
-            screen.blit(t1, t1.get_rect(center=(WIDTH//2,200)))
-            screen.blit(t2, t2.get_rect(center=(WIDTH//2,260)))
-            screen.blit(t3, t3.get_rect(center=(WIDTH//2,320)))
+            screen.blit(font_small.render(result,True,WHITE),(WIDTH//2-50,200))
+            screen.blit(font_small.render(f"TIME: {time_sec:.2f}s",True,WHITE),(WIDTH//2-50,260))
+            screen.blit(font_small.render(f"SCORE: {score}",True,WHITE),(WIDTH//2-50,320))
+            screen.blit(font_small.render(f"BEST: {best_scores[cp_level]}",True,WHITE),(WIDTH//2-50,380))
 
             retry_btn.draw(screen)
-
             pygame.display.flip()
 
             for e in pygame.event.get():
