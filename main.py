@@ -57,6 +57,8 @@ class Button:
 # ボス戦（修正版）
 # =========================
 async def boss_raid():
+    player_hp = 10
+    max_player_hp = 10
     allies = []
     for i in range(3):
         allies.append({
@@ -73,10 +75,16 @@ async def boss_raid():
     enemy_bullets = []
 
     shoot_cd = 0
+    shoot_cooldown = 0  # ★これ追加
+    cooldown_time = 10  # ★これもあると便利
     special_gauge = 20
 
     player_alive = True
     respawn_timer = 0
+
+    invincible_timer = 0  # 無敵時間
+    player_hp = 10
+    max_player_hp = 10
 
     left_btn = pygame.Rect(30, HEIGHT-160, 80, 80)
     right_btn = pygame.Rect(130, HEIGHT-160, 80, 80)
@@ -84,9 +92,37 @@ async def boss_raid():
     special_btn = pygame.Rect(WIDTH-110, HEIGHT-250, 80, 60)
 
     active_touches = {}
+    # ===== 味方AI（毎フレーム動く）=====
 
     while True:
+        # ===== 無敵タイマー減少 =====
+        if invincible_timer > 0:
+            invincible_timer -= 1
+        # ===== ボス移動 =====
+        boss.x += random.choice([-3, -2, -1, 1, 2, 3])
 
+        # 画面外に出ないようにする
+        boss.x = max(0, min(WIDTH - boss.width, boss.x))
+        for a in allies:
+            dx = boss.centerx - a["rect"].centerx
+
+            # 移動
+            if abs(dx) > 3:
+                a["rect"].x += dx * 0.05
+
+            # 画面外防止
+            a["rect"].x = max(0, min(WIDTH - a["rect"].width, a["rect"].x))
+
+            # 攻撃（クールダウン）
+            a["cooldown"] -= 1
+            if a["cooldown"] <= 0:
+                bullets.append({
+                    "rect": pygame.Rect(a["rect"].centerx - 5, a["rect"].y, 10, 10),
+                    "power": 1
+                })
+                a["cooldown"] = 30
+        if shoot_cooldown > 0:
+            shoot_cooldown -= 1
         clock.tick(60)
         screen.fill(BLACK)
 
@@ -107,8 +143,11 @@ async def boss_raid():
             if shoot_btn.collidepoint((x,y)): shooting=True
             if special_btn.collidepoint((x,y)): special=True
 
-        if moving_left: player.x -= 5
-        if moving_right: player.x += 5
+            if player_alive:
+                if moving_left: player.x -= 5
+                if moving_right: player.x += 5
+            if moving_left: player.x -= 5
+            if moving_right: player.x += 5
 
         if shoot_cd > 0: shoot_cd -= 1
 
@@ -118,10 +157,23 @@ async def boss_raid():
             if respawn_timer <= 0:
                 player_alive = True
                 player.x = WIDTH // 2
-
-        if shooting and shoot_cd == 0:
-            bullets.append({"rect": pygame.Rect(player.centerx - 5, player.y, 10, 10), "power": 1})
-            shoot_cd = 10
+                invincible_timer = 120  # ★2秒無敵
+            respawn_timer -= 1
+            if respawn_timer <= 0:
+                player_alive = True
+                player.x = WIDTH // 2
+        else:
+            if shooting and shoot_cooldown == 0:
+                bullets.append({
+                    "rect": pygame.Rect(player.centerx - 5, player.y, 10, 10),
+                    "power": 1
+                })
+                shoot_cooldown = cooldown_time
+                bullets.append({
+                    "rect": pygame.Rect(player.centerx - 5, player.y, 10, 10),
+                    "power": 1
+                })
+                shoot_cooldown = cooldown_time
 
         if special and special_gauge >= 20:
             bullets.append({"rect": pygame.Rect(player.centerx - 20, player.y, 40, 40), "power": 5})
@@ -145,18 +197,6 @@ async def boss_raid():
                         "power": 1
                     })
                     a["cooldown"] = 30
-            # 味方の動き
-            # ===== 味方の移動（強化版）=====
-            dx = boss.centerx - a["rect"].centerx
-
-            if abs(dx) > 5:
-                a["rect"].x += dx * 0.05  # なめらか追尾
-
-                if random.randint(0, 20) == 0:
-                    bullets.append({
-                        "rect": pygame.Rect(a["rect"].centerx - 5, a["rect"].y, 10, 10),
-                        "power": 1
-                    })
 
         for i in range(3):
             if random.randint(0, 10) == 0:
@@ -174,13 +214,39 @@ async def boss_raid():
                 boss_hp -= b["power"]
                 bullets.remove(b)
 
-        for b in enemy_bullets[:]:
-            if player_alive and player.colliderect(b):
-                player_alive = False
-                respawn_timer = 600  # 60FPS × 10秒
+            for b in enemy_bullets[:]:
+                if player_alive and invincible_timer == 0 and player.colliderect(b):
+                    enemy_bullets.remove(b)
 
-        if player_alive:
+                    player_hp -= 1
+
+                    if player_hp <= 0:
+                        player_alive = False
+                        respawn_timer = 600  # 10秒
+                        player_hp = max_player_hp
+            if player_alive and player.colliderect(b):
+                enemy_bullets.remove(b)
+                player_hp -= 1
+
+                if player_hp <= 0:
+                    player_alive = False
+                    respawn_timer = 600
+                    player_hp = max_player_hp  # 復活時に全回復
+                respawn_timer = 600
+
+        # プレイヤー描画（外に出す！）
+            if player_alive:
+                if moving_left: player.x -= 5
+                if moving_right: player.x += 5
             pygame.draw.rect(screen, BLUE, player)
+        else:
+            screen.blit(font_small.render("RESPAWN...", True, WHITE), (180, HEIGHT - 200))
+        if player_alive:
+            # 無敵中は点滅
+            if invincible_timer > 0 and pygame.time.get_ticks() % 300 < 150:
+                pass
+            else:
+                pygame.draw.rect(screen, BLUE, player)
         else:
             screen.blit(font_small.render("RESPAWN...", True, WHITE), (180, HEIGHT - 200))
         pygame.draw.rect(screen, RED, boss)
@@ -199,10 +265,20 @@ async def boss_raid():
         pygame.draw.rect(screen, WHITE, (x,10,200,20),2)
         pygame.draw.rect(screen, RED, (x,10,200*(boss_hp/300),20))
 
+        # ===== プレイヤーHPバー =====
+        pygame.draw.rect(screen, WHITE, (140, HEIGHT - 40, 200, 20), 2)
+        pygame.draw.rect(screen, BLUE, (140, HEIGHT - 40, 200 * (player_hp / max_player_hp), 20))
+
         # ボタン
         pygame.draw.rect(screen, GREEN, left_btn)
         pygame.draw.rect(screen, GREEN, right_btn)
-        pygame.draw.rect(screen, RED, shoot_btn)
+        # クールタイム中は灰色
+        if shoot_cooldown > 0:
+            shoot_color = GRAY
+        else:
+            shoot_color = RED
+
+        pygame.draw.rect(screen, shoot_color, shoot_btn)
         pygame.draw.rect(screen, YELLOW if special_gauge>=20 else GRAY, special_btn)
 
         screen.blit(font_small.render("L",True,WHITE), font_small.render("L",True,WHITE).get_rect(center=left_btn.center))
@@ -383,10 +459,6 @@ async def main():
                 special_timer = 0
                 special_gauge = min(20, special_gauge + 1)
 
-            if player_alive:
-                if moving_left: player.x -= 5
-                if moving_right: player.x += 5
-
             if shooting and shoot_cooldown==0:
                 player_bullets.append({"rect":pygame.Rect(player.centerx-5, player.y,10,10),"power":1+combo})
                 shoot_cooldown=cooldown_time
@@ -493,7 +565,12 @@ async def main():
 
             pygame.draw.rect(screen, GREEN, left_btn)
             pygame.draw.rect(screen, GREEN, right_btn)
-            pygame.draw.rect(screen, RED, shoot_btn)
+            if shoot_cooldown > 0:
+                shoot_color = GRAY
+            else:
+                shoot_color = RED
+
+            pygame.draw.rect(screen, shoot_color, shoot_btn)
             pygame.draw.rect(screen, YELLOW if special_gauge>=20 else GRAY, special_btn)
 
             screen.blit(font_small.render("L",True,WHITE), font_small.render("L",True,WHITE).get_rect(center=left_btn.center))
