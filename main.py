@@ -32,40 +32,245 @@ cp_levels = [
     {"shoot_rate":3,"speed":12},
 ]
 
-# ステージごとのベストスコアを保持
-best_scores = [0]*10
+for i in range(10,20):
+    cp_levels.append({
+        "shoot_rate": max(1, 3 - (i-9)),
+        "speed": 12 + (i-9)*2
+    })
+
+best_scores = [0]*20
 
 class Button:
     def __init__(self, rect, color, text):
         self.rect = pygame.Rect(rect)
         self.color = color
         self.text = text
+
     def draw(self, screen):
         pygame.draw.rect(screen, self.color, self.rect)
         pygame.draw.rect(screen, WHITE, self.rect, 2)
         t = font_small.render(self.text, True, WHITE)
         screen.blit(t, t.get_rect(center=self.rect.center))
 
-async def main():
-    global best_scores
+
+# =========================
+# ボス戦（修正版）
+# =========================
+async def boss_raid():
+    allies = []
+    for i in range(3):
+        allies.append({
+            "rect": pygame.Rect(100 + i * 100, HEIGHT - 200, 40, 40),
+            "hp": 5,
+            "cooldown": random.randint(0, 30)
+        })
+    player = pygame.Rect(WIDTH // 2 - 25, HEIGHT - 260, 50, 50)
+
+    boss = pygame.Rect(WIDTH // 2 - 60, 50, 120, 120)
+    boss_hp = 300
+
+    bullets = []
+    enemy_bullets = []
+
+    shoot_cd = 0
+    special_gauge = 20
+
+    player_alive = True
+    respawn_timer = 0
+
+    left_btn = pygame.Rect(30, HEIGHT-160, 80, 80)
+    right_btn = pygame.Rect(130, HEIGHT-160, 80, 80)
+    shoot_btn = pygame.Rect(WIDTH-110, HEIGHT-160, 80, 80)
+    special_btn = pygame.Rect(WIDTH-110, HEIGHT-250, 80, 60)
+
+    active_touches = {}
+
     while True:
-        # ===== スタート画面 =====
+
+        clock.tick(60)
+        screen.fill(BLACK)
+
+        moving_left = moving_right = shooting = special = False
+
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                return
+            if e.type in (pygame.FINGERDOWN, pygame.FINGERMOTION):
+                active_touches[e.finger_id]=(e.x,e.y)
+            if e.type==pygame.FINGERUP:
+                active_touches.pop(e.finger_id,None)
+
+        for tx,ty in active_touches.values():
+            x,y=tx*WIDTH,ty*HEIGHT
+            if left_btn.collidepoint((x,y)): moving_left=True
+            if right_btn.collidepoint((x,y)): moving_right=True
+            if shoot_btn.collidepoint((x,y)): shooting=True
+            if special_btn.collidepoint((x,y)): special=True
+
+        if moving_left: player.x -= 5
+        if moving_right: player.x += 5
+
+        if shoot_cd > 0: shoot_cd -= 1
+
+        # ===== 復活処理 =====
+        if not player_alive:
+            respawn_timer -= 1
+            if respawn_timer <= 0:
+                player_alive = True
+                player.x = WIDTH // 2
+
+        if shooting and shoot_cd == 0:
+            bullets.append({"rect": pygame.Rect(player.centerx - 5, player.y, 10, 10), "power": 1})
+            shoot_cd = 10
+
+        if special and special_gauge >= 20:
+            bullets.append({"rect": pygame.Rect(player.centerx - 20, player.y, 40, 40), "power": 5})
+            special_gauge = 0
+
+            # ===== 味方AI（ここに入れる！！）=====
+            for a in allies:
+                # ボスに向かって動く
+                dx = boss.centerx - a["rect"].centerx
+                if abs(dx) > 5:
+                    a["rect"].x += dx * 0.05
+
+                # 画面外に出ないようにする
+                a["rect"].x = max(0, min(WIDTH - a["rect"].width, a["rect"].x))
+
+                # 攻撃（クールダウン）
+                a["cooldown"] -= 1
+                if a["cooldown"] <= 0:
+                    bullets.append({
+                        "rect": pygame.Rect(a["rect"].centerx - 5, a["rect"].y, 10, 10),
+                        "power": 1
+                    })
+                    a["cooldown"] = 30
+            # 味方の動き
+            # ===== 味方の移動（強化版）=====
+            dx = boss.centerx - a["rect"].centerx
+
+            if abs(dx) > 5:
+                a["rect"].x += dx * 0.05  # なめらか追尾
+
+                if random.randint(0, 20) == 0:
+                    bullets.append({
+                        "rect": pygame.Rect(a["rect"].centerx - 5, a["rect"].y, 10, 10),
+                        "power": 1
+                    })
+
+        for i in range(3):
+            if random.randint(0, 10) == 0:
+                enemy_bullets.append(
+                    pygame.Rect(boss.centerx - 5 + i * 15, boss.bottom, 10, 10)
+                )
+
+        for b in bullets:
+            b["rect"].y -= 8
+        for b in enemy_bullets:
+            b.y += 6
+
+        for b in bullets[:]:
+            if boss.colliderect(b["rect"]):
+                boss_hp -= b["power"]
+                bullets.remove(b)
+
+        for b in enemy_bullets[:]:
+            if player_alive and player.colliderect(b):
+                player_alive = False
+                respawn_timer = 600  # 60FPS × 10秒
+
+        if player_alive:
+            pygame.draw.rect(screen, BLUE, player)
+        else:
+            screen.blit(font_small.render("RESPAWN...", True, WHITE), (180, HEIGHT - 200))
+        pygame.draw.rect(screen, RED, boss)
+
+        # 味方を描画
+        for a in allies:
+            pygame.draw.rect(screen, GREEN, a["rect"])
+
+        for b in bullets:
+            pygame.draw.rect(screen, WHITE, b["rect"])
+        for b in enemy_bullets:
+            pygame.draw.rect(screen, YELLOW, b)
+
+        # HPバー
+        x = (WIDTH-200)//2
+        pygame.draw.rect(screen, WHITE, (x,10,200,20),2)
+        pygame.draw.rect(screen, RED, (x,10,200*(boss_hp/300),20))
+
+        # ボタン
+        pygame.draw.rect(screen, GREEN, left_btn)
+        pygame.draw.rect(screen, GREEN, right_btn)
+        pygame.draw.rect(screen, RED, shoot_btn)
+        pygame.draw.rect(screen, YELLOW if special_gauge>=20 else GRAY, special_btn)
+
+        screen.blit(font_small.render("L",True,WHITE), font_small.render("L",True,WHITE).get_rect(center=left_btn.center))
+        screen.blit(font_small.render("R",True,WHITE), font_small.render("R",True,WHITE).get_rect(center=right_btn.center))
+        screen.blit(font_small.render("SHOOT",True,WHITE), font_small.render("SHOOT",True,WHITE).get_rect(center=shoot_btn.center))
+        screen.blit(font_small.render("SP",True,WHITE), font_small.render("SP",True,WHITE).get_rect(center=special_btn.center))
+
+        pygame.display.flip()
+        if boss_hp <= 0:
+            return
+
+
+# =========================
+# メイン
+# =========================
+async def main():
+    while True:
         screen.fill(BLACK)
         t = font_small.render("Tap to Start", True, WHITE)
         screen.blit(t, t.get_rect(center=(WIDTH//2, HEIGHT//2)))
         pygame.display.flip()
 
         start = False
-        active_touches = {}
         while not start:
             for e in pygame.event.get():
-                if e.type == pygame.QUIT: return
+                if e.type == pygame.QUIT:
+                    return
                 if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
                     start = True
-                    active_touches.clear()
             await asyncio.sleep(0)
 
-        # ===== 難易度選択 =====
+        # ===== モード選択 =====
+        normal_btn = Button((80, 300, 140, 80), BLUE, "NORMAL")
+        boss_btn = Button((260, 300, 140, 80), RED, "BOSS")
+
+        selecting = True
+        mode = "normal"
+
+        while selecting:
+            screen.fill(BLACK)
+            screen.blit(font_small.render("Select Mode", True, WHITE), (150, 200))
+
+            normal_btn.draw(screen)
+            boss_btn.draw(screen)
+
+            pygame.display.flip()
+
+            for e in pygame.event.get():
+                if e.type == pygame.QUIT:
+                    return
+                if e.type in (pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN):
+                    pos = (e.x * WIDTH, e.y * HEIGHT) if e.type == pygame.FINGERDOWN else e.pos
+
+                    if normal_btn.rect.collidepoint(pos):
+                        mode = "normal"
+                        selecting = False
+
+                    if boss_btn.rect.collidepoint(pos):
+                        mode = "boss"
+                        selecting = False
+
+            await asyncio.sleep(0)
+
+        # ===== 分岐 =====
+        if mode == "boss":
+            await boss_raid()
+            continue
+
         buttons = [
             Button((60,200,120,50),GREEN,"Easy"),
             Button((200,200,120,50),BLUE,"Normal"),
@@ -93,7 +298,9 @@ async def main():
             await asyncio.sleep(0)
 
         # ===== ステージ選択 =====
-        level_buttons=[Button((20+i*45,350,40,40),(0,255-20*i,255),str(i+1)) for i in range(10)]
+        # ===== ステージ選択 =====
+        level_buttons = [Button((20 + (i % 10) * 45, 350 + (i // 10) * 60, 40, 40), (0, 255 - 10 * i, 255), str(i + 1))
+                         for i in range(20)]
         selecting=True
         cp_level=0
         while selecting:
@@ -176,8 +383,9 @@ async def main():
                 special_timer = 0
                 special_gauge = min(20, special_gauge + 1)
 
-            if moving_left: player.x-=5
-            if moving_right: player.x+=5
+            if player_alive:
+                if moving_left: player.x -= 5
+                if moving_right: player.x += 5
 
             if shooting and shoot_cooldown==0:
                 player_bullets.append({"rect":pygame.Rect(player.centerx-5, player.y,10,10),"power":1+combo})
@@ -226,7 +434,7 @@ async def main():
                     explosions.append([enemy.centerx, enemy.centery, 5])
                     if not b.get("pierce"): player_bullets.remove(b)
                     combo += 1
-                    combo_timer = 300
+                    combo_timer = 180
 
             for b in enemy_bullets[:]:
                 if player.colliderect(b):
