@@ -241,12 +241,13 @@ async def normal_game(cp_level, max_player_hp):
             buff_timer = 0
             buff_gauge = min(20, buff_gauge + 1)
 
+        # ===== バフ調整（弱体化版）=====
         if buff_gauge >= 20:
             if buff_c:
-                cooldown_reduction += 0.1
+                cooldown_reduction += 0.03  # ←0.1 → 0.03（重要）
                 buff_gauge = 0
             elif buff_s:
-                attack_power += 0.3
+                attack_power += 0.15  # ←0.3 → 半分
                 buff_gauge = 0
             elif buff_h:
                 max_player_hp += 2
@@ -546,9 +547,9 @@ async def boss_battle(level):
             if buff_s_btn.collidepoint((x, y)): buff_s = True
             if buff_h_btn.collidepoint((x, y)): buff_h = True
 
-        # ===== ゲージ =====
+        # ===== スペシャルゲージ（遅くする）=====
         special_timer += 1
-        if special_timer >= 60:
+        if special_timer >= 90:  # ←60→90（溜まるの遅く）
             special_timer = 0
             special_gauge = min(10, special_gauge + 1)
 
@@ -561,10 +562,10 @@ async def boss_battle(level):
         # ===== バフ発動 =====
         if buff_gauge >= 20:
             if buff_c:
-                cooldown_reduction += 0.1
+                cooldown_reduction += 0.03  # ←0.1 → 0.03（超重要）
                 buff_gauge = 0
             elif buff_s:
-                attack_power += 0.3
+                attack_power += 0.15  # ←0.3 → 半分
                 buff_gauge = 0
             elif buff_h:
                 player_hp = min(max_player_hp, player_hp + 2)
@@ -730,7 +731,13 @@ async def boss_battle(level):
 
                 if player_hp <= 0:
                     player_dead = True
-                    combo = 0  # コンボリセット
+
+                    # ===== バフリセット =====
+                    cooldown_reduction = 0
+                    attack_power = 0
+                    buff_gauge = 0
+
+                    combo = 0
 
         # ===== 味方被弾 =====
         for i, cp in enumerate(cp_allies):
