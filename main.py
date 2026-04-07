@@ -618,12 +618,15 @@ async def boss_battle(level):
         for i, cp in enumerate(cp_allies):
 
             # ===== ボス弾 =====
-            if random.randint(0, 15) == 0:
+            if random.randint(0, 7) == 0:
                 bullets.append(pygame.Rect(boss.centerx, boss.bottom, 14, 14))
 
             # ===== 弾移動 =====
             for pb in player_bullets:
-                pb["rect"].y -= 2
+                if pb.get("ally"):
+                    pb["rect"].y -= 1  # ←味方だけ半分
+                else:
+                    pb["rect"].y -= 2  # ←自分はそのまま
 
             # ===== 弾相殺＆ボスヒット =====
             for pb in player_bullets[:]:
@@ -636,7 +639,11 @@ async def boss_battle(level):
                         bullets.remove(eb)
                         hit = True
                         break
-
+                # すでにヒット済みの貫通弾は無視
+                if pb.get("pierce") and pb.get("hit_enemy"):
+                    continue
+                if pb.get("pierce"):
+                    pb["hit_enemy"] = True
                 # ボスヒット
                 if boss.colliderect(pb["rect"]):
                     boss_hp -= pb["power"]
@@ -698,7 +705,7 @@ async def boss_battle(level):
                     if random.randint(0, max(25 - level, 6)) == 0:
                         for _ in range(2):
                             player_bullets.append({
-                                "rect": pygame.Rect(cp.centerx + random.randint(-10, 10), cp.y + 20, 8, 16),
+                                "rect": pygame.Rect(cp.centerx + random.randint(-10, 10), cp.y + 20, 6, 12),
                                 "power": 0.7 + attack_power,
                                 "ally": True
                             })
@@ -726,6 +733,11 @@ async def boss_battle(level):
                     cooldown_reduction = 0
                     attack_power = 0
                     buff_gauge = 0
+
+                    combo = 0
+
+                    # 🔥これ追加
+                    special_gauge = 0
 
                     combo = 0
 
