@@ -47,12 +47,11 @@ class Button:
         t = font_small.render(self.text, True, WHITE)
         screen.blit(t, t.get_rect(center=self.rect.center))
 
-
 # =========================
 # 弾除けゲーム（弾の種類追加版）
 # =========================
 class Bullet:
-    def __init__(self, x, y):
+    def __init__(self, x, y, level):
         self.type = random.choice(["normal", "fast", "big", "split", "homing", "slow", "wobble"])
         self.x = x
         self.y = y
@@ -63,7 +62,7 @@ class Bullet:
 
         # 弾種類ごとの設定
         if self.type == "big":
-            self.size = 20
+            self.size = 40
             self.speed = 5
             self.score = 7
         elif self.type == "homing":
@@ -85,6 +84,8 @@ class Bullet:
         else:
             self.speed = 5
             self.score = 1
+
+        self.speed += level
 
     def move(self, player_x, player_y):
         if self.type == "homing":
@@ -131,7 +132,7 @@ async def dodge_game(level):
 
         # 弾生成（全種類ランダム）
         if random.randint(0, 20) == 0:
-            bullets.append(Bullet(random.randint(0, WIDTH - 20), -10))
+            bullets.append(Bullet(random.randint(0, WIDTH - 20), -10, level))
 
         moving_left = False
         moving_right = False
@@ -189,6 +190,7 @@ async def dodge_game(level):
 
         pygame.display.flip()
         await asyncio.sleep(0)
+
 # =========================
 # ノーマルゲーム（前半：バフ基盤）
 # =========================
@@ -241,6 +243,8 @@ async def normal_game(cp_level, max_player_hp):
     blink_timer = 0
 
     active_touches = {}
+
+    hp_recover_timer = 0  # ←★これを追加
 
     running = True
     result = None
@@ -397,6 +401,12 @@ async def normal_game(cp_level, max_player_hp):
 
                 buff_gauge = min(20, buff_gauge + 1)
 
+        # ===== HP 自動回復（5秒で1回復）=====
+        hp_recover_timer += 1
+        if hp_recover_timer >= 300:  # 60fps × 5秒
+            hp_recover_timer = 0
+            player_hp = min(max_player_hp, player_hp + 1)
+
         # ===== プレイヤー被弾 =====
         for b in enemy_bullets[:]:
             if player.colliderect(b):
@@ -516,7 +526,7 @@ async def boss_battle(level):
     max_player_hp = 10
     cp_directions = [1, -1, 1]
 
-    boss_hp = int(80 + (level + 1) ** 1.8 * 10)
+    boss_hp = int((80 + (level + 1) ** 1.8 * 10) * 2)
     max_boss_hp = boss_hp
 
     bullets = []
@@ -745,7 +755,7 @@ async def boss_battle(level):
                 cp.x = max(0, min(WIDTH - cp.width, cp.x))
 
                 # 🔥 Lv10相当（ここだけ変更）
-                if random.randint(0, 8) == 0:
+                if random.randint(0, 16) == 0:
                     player_bullets.append({
                         "rect": pygame.Rect(cp.centerx - 3, cp.y + 20, 6, 12),
                         "power": 2 + attack_power,
@@ -766,6 +776,18 @@ async def boss_battle(level):
                 explosions.append([player.centerx, player.centery, 6])
                 bullets.remove(b)
 
+        # ===== CPU被弾（修正版＋爆発）=====
+        for b in bullets[:]:
+            for i, cp in enumerate(cp_allies):
+                if ally_hp[i] > 0 and cp.colliderect(b["rect"]):
+                    ally_hp[i] -= 1
+
+                    # ★爆発エフェクト追加
+                    explosions.append([cp.centerx, cp.centery, 6])
+
+                    bullets.remove(b)
+                    break
+
                 if player_hp <= 0:
                     player_dead = True
                     cooldown_reduction = 0
@@ -782,7 +804,7 @@ async def boss_battle(level):
 
         time_sec = (pygame.time.get_ticks() - start_time) / 1000
 
-        if time_sec >= 120:
+        if time_sec >= 60:
             return "LOSE", 0, time_sec
 
         if boss_hp <= 0:
