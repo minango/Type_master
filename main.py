@@ -359,11 +359,8 @@ async def normal_game(cp_level, max_player_hp):
             normal_game.enemy_target_x = random.randint(0, WIDTH - enemy.width)
             normal_game.enemy_move_timer = random.randint(30, 90)
 
-        # ターゲットに向かって移動
-        if enemy.x < normal_game.enemy_target_x:
-            enemy.x += enemy_speed
-        elif enemy.x > normal_game.enemy_target_x:
-            enemy.x -= enemy_speed
+        # ★ 滑らか移動に置き換え
+        enemy.x += (normal_game.enemy_target_x - enemy.x) * 0.05
 
         # ===== 敵弾（調整）=====
         # 元：- cp_level * 2
@@ -814,7 +811,7 @@ async def boss_battle(level):
 
         time_sec = (pygame.time.get_ticks() - start_time) / 1000
 
-        if time_sec >= 120:
+        if time_sec >= 180:
             return "LOSE", 0, time_sec
 
         if boss_hp <= 0:
