@@ -345,15 +345,25 @@ async def normal_game(cp_level, max_player_hp):
             })
             special_gauge = 0
 
-        # ===== 敵移動（調整＋ランダム追加）=====
-        dx = player.centerx - enemy.centerx
-        direction = dx / abs(dx) if dx != 0 else 0
+        # ===== 敵移動（ランダム化・完全版）=====
+        if not hasattr(normal_game, "enemy_target_x"):
+            normal_game.enemy_target_x = enemy.x
+            normal_game.enemy_move_timer = 0
 
-        # 元：+ cp_level * 0.3
+        # ★ これ追加（速度をここで定義）
         enemy_speed = cp_levels[cp]["speed"] + cp_level * 0.2
 
-        # 変更後（ヌルヌル）
-        enemy.x += direction * enemy_speed
+        normal_game.enemy_move_timer -= 1
+
+        if normal_game.enemy_move_timer <= 0:
+            normal_game.enemy_target_x = random.randint(0, WIDTH - enemy.width)
+            normal_game.enemy_move_timer = random.randint(30, 90)
+
+        # ターゲットに向かって移動
+        if enemy.x < normal_game.enemy_target_x:
+            enemy.x += enemy_speed
+        elif enemy.x > normal_game.enemy_target_x:
+            enemy.x -= enemy_speed
 
         # ===== 敵弾（調整）=====
         # 元：- cp_level * 2
@@ -804,7 +814,7 @@ async def boss_battle(level):
 
         time_sec = (pygame.time.get_ticks() - start_time) / 1000
 
-        if time_sec >= 60:
+        if time_sec >= 120:
             return "LOSE", 0, time_sec
 
         if boss_hp <= 0:
