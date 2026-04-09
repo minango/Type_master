@@ -353,11 +353,12 @@ async def normal_game(cp_level, max_player_hp):
         # ★ これ追加（速度をここで定義）
         enemy_speed = cp_levels[cp]["speed"] + cp_level * 0.2
 
+        # ★ ターゲット変更を高速化（止まらない）
         normal_game.enemy_move_timer -= 1
 
         if normal_game.enemy_move_timer <= 0:
             normal_game.enemy_target_x = random.randint(0, WIDTH - enemy.width)
-            normal_game.enemy_move_timer = random.randint(30, 90)
+            normal_game.enemy_move_timer = random.randint(5, 20)  # ←ここが重要
 
         # ★ 滑らか移動に置き換え
         enemy.x += (normal_game.enemy_target_x - enemy.x) * 0.05
@@ -798,8 +799,6 @@ async def boss_battle(level):
 
                 if player_hp <= 0:
                     player_dead = True
-                    cooldown_reduction = 0
-                    attack_power = 0
                     buff_gauge = 0
                     special_gauge = 0
                     combo = 0
