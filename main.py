@@ -345,23 +345,26 @@ async def normal_game(cp_level, max_player_hp):
             })
             special_gauge = 0
 
-        # ===== 敵移動（ランダム化・完全版）=====
+        # ===== 敵移動（追跡70%＋ランダム30%）=====
         if not hasattr(normal_game, "enemy_target_x"):
             normal_game.enemy_target_x = enemy.x
             normal_game.enemy_move_timer = 0
 
-        # ★ これ追加（速度をここで定義）
-        enemy_speed = cp_levels[cp]["speed"] + cp_level * 0.2
-
-        # ★ ターゲット変更を高速化（止まらない）
         normal_game.enemy_move_timer -= 1
 
         if normal_game.enemy_move_timer <= 0:
-            normal_game.enemy_target_x = random.randint(0, WIDTH - enemy.width)
-            normal_game.enemy_move_timer = random.randint(5, 20)  # ←ここが重要
+            # プレイヤー方向（追跡70%）
+            track = player.centerx - enemy.width // 2
 
-        # ★ 滑らか移動に置き換え
-        enemy.x += (normal_game.enemy_target_x - enemy.x) * 0.05
+            # ランダム揺らぎ（30%）
+            random_offset = random.randint(-80, 80)
+
+            normal_game.enemy_target_x = track * 0.7 + (enemy.x + random_offset) * 0.3
+
+            normal_game.enemy_move_timer = random.randint(10, 25)
+
+        # 滑らか移動
+        enemy.x += (normal_game.enemy_target_x - enemy.x) * 0.08
 
         # ===== 敵弾（調整）=====
         # 元：- cp_level * 2
@@ -405,6 +408,14 @@ async def normal_game(cp_level, max_player_hp):
                     player_bullets.remove(b)
 
                 combo += 1
+                # ★ コンボ回復（3の倍数で +1、10コンボ以上は毎回 +1）
+                if combo >= 10:
+                    # 10以上は毎回 +1
+                    player_hp = min(max_player_hp, player_hp + 1)
+                elif combo % 3 == 0:
+                    # 3,6,9 のときだけ +1
+                    player_hp = min(max_player_hp, player_hp + 1)
+
                 combo_timer = 180
 
                 buff_gauge = min(20, buff_gauge + 1)
@@ -733,6 +744,12 @@ async def boss_battle(level):
 
                 if not pb.get("ally"):
                     combo += 1
+                    # ★ コンボ回復（3の倍数で +1、10コンボ以上は毎回 +1）
+                    if combo >= 10:
+                        player_hp = min(max_player_hp, player_hp + 1)
+                    elif combo % 3 == 0:
+                        player_hp = min(max_player_hp, player_hp + 1)
+
                     combo_timer = 180
                     buff_gauge = min(20, buff_gauge + 1)
 
