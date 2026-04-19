@@ -345,7 +345,7 @@ async def normal_game(cp_level, max_player_hp):
             })
             special_gauge = 0
 
-        # ===== 敵移動（追跡70%＋ランダム30%）=====
+        # ===== 敵移動（追跡40%＋ランダム60%）=====
         if not hasattr(normal_game, "enemy_target_x"):
             normal_game.enemy_target_x = enemy.x
             normal_game.enemy_move_timer = 0
@@ -353,17 +353,14 @@ async def normal_game(cp_level, max_player_hp):
         normal_game.enemy_move_timer -= 1
 
         if normal_game.enemy_move_timer <= 0:
-            # プレイヤー方向（追跡70%）
             track = player.centerx - enemy.width // 2
+            random_offset = random.randint(-120, 120)
 
-            # ランダム揺らぎ（30%）
-            random_offset = random.randint(-80, 80)
+            normal_game.enemy_target_x = track * 0.4 + (enemy.x + random_offset) * 0.6
 
-            normal_game.enemy_target_x = track * 0.7 + (enemy.x + random_offset) * 0.3
+            normal_game.enemy_move_timer = random.randint(12, 28)
 
-            normal_game.enemy_move_timer = random.randint(10, 25)
-
-        # 滑らか移動
+        # ★ 速度はそのまま（0.08）
         enemy.x += (normal_game.enemy_target_x - enemy.x) * 0.08
 
         # ===== 敵弾（調整）=====
@@ -744,10 +741,9 @@ async def boss_battle(level):
 
                 if not pb.get("ally"):
                     combo += 1
-                    # ★ コンボ回復（3の倍数で +1、10コンボ以上は毎回 +1）
-                    if combo >= 10:
-                        player_hp = min(max_player_hp, player_hp + 1)
-                    elif combo % 3 == 0:
+
+                    # ★ ボス戦：5コンボごとに +1 回復
+                    if combo % 5 == 0:
                         player_hp = min(max_player_hp, player_hp + 1)
 
                     combo_timer = 180
