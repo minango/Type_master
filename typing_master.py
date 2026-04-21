@@ -4,11 +4,41 @@ import random
 import time
 import numpy as np
 import pykakasi
+import json
+import os
+
+def save_best_score(score):
+    if os.path.exists("best_score.json"):
+        with open("best_score.json","r") as f:
+            best = json.load(f)
+    else:
+        best = 0
+
+    if score > best:
+        with open("best_score.json","w") as f:
+            json.dump(score, f)
+# ===== 記録読み込み・保存 =====
+def load_records():
+    if os.path.exists("records.json"):
+        with open("records.json", "r") as f:
+            return json.load(f)
+    else:
+        return {
+            "best_score": 0,
+            "best_rank": "Starter",
+            "best_wpm": 0,
+            "best_max_wpm": 0,
+            "best_rkpm": 0
+        }
+
+def save_records(records):
+    with open("records.json", "w") as f:
+        json.dump(records, f)
+
 
 kks = pykakasi.kakasi()
 
 pygame.init()
-pygame.mixer.init(frequency=44100, size=-16, channels=2)
 
 WIDTH, HEIGHT = 900, 500
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -20,19 +50,6 @@ clock = pygame.time.Clock()
 font_big = pygame.font.Font("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc", 70)
 font = pygame.font.Font("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 40)
 font_small = pygame.font.Font("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 30)
-
-# ===== 音 =====
-def create_click_sound():
-    sr = 44100
-    n = int(sr * 0.01)
-    noise = np.random.uniform(-1,1,n)
-    env = np.linspace(1,0,n)
-    click = noise * env
-    sound = (click * 30000).astype(np.int16)
-    stereo = np.column_stack((sound,sound))
-    return pygame.sndarray.make_sound(stereo)
-
-key_sound = create_click_sound()
 
 # ===== データ =====
 words = [
@@ -118,6 +135,125 @@ longs = [
 ] * 2
 
 current_list = words
+themes = {
+    # 1. Shadow（黒×青）
+    "shadow": {
+        "bg": (5, 5, 15),          # 深い黒青
+        "text": (200, 220, 255),
+        "subtext": (120, 140, 170),
+        "typed": (80, 180, 255),
+        "miss": (255, 90, 120),
+        "button_bg": (20, 30, 60),
+        "button_text": (200, 220, 255),
+    },
+
+    # 2. Crimson（黒×赤）
+    "crimson": {
+        "bg": (30, 0, 0),          # 深い赤黒
+        "text": (255, 200, 200),
+        "subtext": (150, 120, 120),
+        "typed": (255, 120, 120),
+        "miss": (255, 80, 80),
+        "button_bg": (80, 20, 20),
+        "button_text": (255, 200, 200),
+    },
+
+    # 3. Emerald（深緑）
+    "emerald": {
+        "bg": (0, 25, 10),         # 深い緑
+        "text": (210, 255, 230),
+        "subtext": (130, 170, 150),
+        "typed": (120, 255, 180),
+        "miss": (255, 120, 150),
+        "button_bg": (20, 60, 40),
+        "button_text": (210, 255, 230),
+    },
+
+    # 4. Steel（ダークグレー）
+    "steel": {
+        "bg": (25, 25, 35),        # 青みのあるダークグレー
+        "text": (200, 230, 240),
+        "subtext": (130, 150, 160),
+        "typed": (0, 200, 255),
+        "miss": (255, 120, 120),
+        "button_bg": (50, 50, 70),
+        "button_text": (200, 230, 240),
+    },
+
+    # 5. Violet（紫）
+    "violet": {
+        "bg": (25, 0, 40),         # 濃い紫
+        "text": (230, 210, 255),
+        "subtext": (150, 130, 180),
+        "typed": (180, 120, 255),
+        "miss": (255, 120, 160),
+        "button_bg": (60, 20, 90),
+        "button_text": (230, 210, 255),
+    },
+
+    # 6. Neon（黒×ネオン）
+    "neon": {
+        "bg": (0, 0, 10),          # 真っ黒に近いネオン背景
+        "text": (0, 255, 200),
+        "subtext": (0, 180, 150),
+        "typed": (0, 255, 120),
+        "miss": (255, 0, 120),
+        "button_bg": (0, 80, 80),
+        "button_text": (0, 255, 200),
+    },
+
+    # 7. Midnight（濃紺）
+    "midnight": {
+        "bg": (0, 0, 30),          # 深い紺
+        "text": (220, 230, 255),
+        "subtext": (140, 150, 180),
+        "typed": (120, 160, 255),
+        "miss": (255, 100, 140),
+        "button_bg": (20, 30, 80),
+        "button_text": (220, 230, 255),
+    },
+
+    # 8. Carbon（黒×グレー）
+    "carbon": {
+        "bg": (10, 10, 10),        # 完全な黒
+        "text": (220, 220, 220),
+        "subtext": (150, 150, 150),
+        "typed": (180, 255, 180),
+        "miss": (255, 120, 120),
+        "button_bg": (40, 40, 40),
+        "button_text": (220, 220, 220),
+    },
+
+    # 9. Abyss（深海ブルー）
+    "abyss": {
+        "bg": (0, 10, 30),         # 深海の青
+        "text": (180, 220, 255),
+        "subtext": (100, 140, 180),
+        "typed": (80, 200, 255),
+        "miss": (255, 100, 140),
+        "button_bg": (10, 40, 80),
+        "button_text": (180, 220, 255),
+    },
+
+    # 10. Obsidian（黒曜石）
+    "obsidian": {
+        "bg": (15, 0, 25),         # 黒曜石の紫黒
+        "text": (220, 200, 255),
+        "subtext": (150, 130, 180),
+        "typed": (160, 120, 255),
+        "miss": (255, 120, 160),
+        "button_bg": (40, 10, 60),
+        "button_text": (220, 200, 255),
+    }
+}
+
+
+
+
+
+current_theme = "shadow"
+records = load_records()
+
 
 # ===== 状態 =====
 state = "title"
@@ -146,6 +282,8 @@ last_text = None
 max_wpm = 0
 rkpm = 0
 latency_list = []
+problem_start_inputs = 0
+
 
 
 
@@ -155,6 +293,9 @@ buttons = {
     "短文": pygame.Rect(300,280,300,60),
     "長文": pygame.Rect(300,360,300,60),
 }
+settings_button = pygame.Rect(820, 440, 60, 40)
+highscore_button = pygame.Rect(740, 440, 60, 40)
+
 
 # ===== 表示（元コードそのまま）=====
 def draw_text_multiline(text, font, color, x, y, max_width):
@@ -185,7 +326,7 @@ def draw_roma_with_color(full_text, typed_len, font, x, y, max_width):
     line_height = 45
 
     for i, ch in enumerate(full_text):
-        color = (0,255,0) if i < typed_len else (255,255,255)
+        color = themes[current_theme]["typed"] if i < typed_len else themes[current_theme]["subtext"]
         ch_surface = font.render(ch, True, color)
         ch_width = ch_surface.get_width()
 
@@ -285,15 +426,6 @@ def build_candidates(hira):
             i += 1
             continue
 
-        # ★ 長音（ー）を '-' で入力できるようにする
-        if ch == "ー":
-            new_list = []
-            for base in candidates:
-                new_list.append(base + "-")  # ← ここで '-' を候補に追加
-            candidates = new_list
-            i += 1
-            continue
-
         next_ch = hira[i+1] if i+1 < len(hira) else None
         patterns = get_patterns(ch, next_ch)
 
@@ -365,22 +497,40 @@ def new_problem():
 
     first_key_time = None
     problem_start_time = time.time()
+    global problem_start_inputs
+    problem_start_inputs = total_inputs
 
 
 # ===== メインループ（KEYDOWN 判定部分）=====
 while True:
-    screen.fill((30,30,30))
+    screen.fill(themes[current_theme]["bg"])
     now = time.time()
 
+    # ===== イベント処理 =====
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
+
+        # ===== タイトル =====
         if state == "title":
             if event.type == pygame.MOUSEBUTTONDOWN:
+
+                # テーマ切り替え
+                if settings_button.collidepoint(event.pos):
+                    keys = list(themes.keys())
+                    idx = keys.index(current_theme)
+                    current_theme = keys[(idx + 1) % len(keys)]
+                    continue
+
+                # ハイスコア画面へ
+                if highscore_button.collidepoint(event.pos):
+                    state = "highscore"
+                    continue
+
+                # モード選択
                 for name, rect in buttons.items():
                     if rect.collidepoint(event.pos):
-
                         if name == "単語":
                             current_list = words
                         elif name == "短文":
@@ -396,63 +546,80 @@ while True:
                         new_problem()
                         state = "game"
 
+        # ===== ゲーム =====
         elif state == "game":
-
-            if showing:
-                continue
-
             if event.type == pygame.KEYDOWN:
 
-                char = event.unicode.lower()
+                if showing:
+                    continue
 
-                # a〜z 以外は無視
-                if not ('a' <= char <= 'z'):
+                char = event.unicode.lower()
+                if not (('a' <= char <= 'z') or char == '-'):
                     continue
 
                 total_inputs += 1
 
-                if first_key_time is None:
-                    first_key_time = time.time()
+                if not hasattr(new_problem, "prefix_map"):
+                    new_problem.prefix_map = {}
+
+                if current_text not in new_problem.prefix_map:
+                    prefix_map = {}
+                    for c in current_candidates:
+                        if len(c) == 0:
+                            continue
+                        head = c[0]
+                        prefix_map.setdefault(head, []).append(c)
+                    new_problem.prefix_map[current_text] = prefix_map
+
+                prefix_map = new_problem.prefix_map[current_text]
 
                 typed += char
 
-                # ===== 追加：候補絞り込み =====
-                new_list = [c for c in current_candidates if c.startswith(typed)]
+                if len(typed) == 1:
+                    new_list = prefix_map.get(typed[0], [])
+                else:
+                    new_list = [c for c in current_candidates if c.startswith(typed)]
 
                 if new_list:
+                    if first_key_time is None:
+                        first_key_time = time.time()
                     current_candidates = new_list
-                    current_roma = new_list[0]  # ← ★これを追加（表示ローマ字を同期）
-                    key_sound.play()
+                    current_roma = new_list[0]
                 else:
                     miss_count += 1
                     typed = typed[:-1]
                     continue
 
-                # ===== 完成判定 =====
                 if typed in current_candidates:
-                    elapsed = time.time() - start_time - pause_total
-                    wpm = int((total_inputs / elapsed) * 60) if elapsed > 0 else 0
+                    problem_inputs = total_inputs - problem_start_inputs
+                    problem_elapsed = time.time() - problem_start_time
+                    wpm = int((problem_inputs / problem_elapsed) * 60) if problem_elapsed > 0 else 0
                     max_wpm = max(max_wpm, wpm)
 
-                    latency = round((first_key_time - problem_start_time), 2) if first_key_time else 0
-                    latency_list.append(latency)
-                    # RKPM（初速を除いたWPM）
-                    effective_time = elapsed - latency
-                    if effective_time > 0:
-                        rkpm = int((total_inputs / effective_time) * 60)
+                    if first_key_time:
+                        latency = first_key_time - problem_start_time
+                        if 0 <= latency <= 3:
+                            latency_list.append(latency)
+                        show_latency = round(latency, 2)
                     else:
-                        rkpm = wpm
+                        show_latency = 0
 
                     show_wpm = wpm
-                    show_latency = latency
                     show_time = time.time()
                     pause_start = time.time()
                     showing = True
 
+        # ===== ハイスコア画面 =====
+        elif state == "highscore":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    state = "title"
+
+        # ===== リザルト =====
         elif state == "result":
             if event.type == pygame.KEYDOWN:
-                if time.time() - result_enter_time > 0.3:  # ★ 0.3秒だけ無視
-                    if event.key == pygame.K_RETURN:  # ★ Enter だけ受け付ける
+                if time.time() - result_enter_time > 0.3:
+                    if event.key == pygame.K_RETURN:
                         state = "title"
 
     # ===== showing の終了処理 =====
@@ -461,70 +628,132 @@ while True:
         pause_total += time.time() - pause_start
         new_problem()
 
-    # ===== elapsed の定義 =====
+    # ===== 経過時間 =====
     if showing:
-        # ★ WPM表示中は時間を止める
         elapsed = show_time - start_time - pause_total
     else:
         elapsed = now - start_time - pause_total
 
     if state == "game" and elapsed >= game_time:
         state = "result"
-        result_enter_time = time.time()  # ★ クールタイム開始
+        result_enter_time = time.time()
 
-    # ===== 表示 =====
+    # ===== 描画 =====
     if state == "title":
-        title = font_big.render("TypeMaster", True, (255,255,255))
-        screen.blit(title,(240,100))
+        title = font_big.render("TypeMaster", True, themes[current_theme]["text"])
+        screen.blit(title, (240, 100))
+
+        pygame.draw.rect(screen, themes[current_theme]["button_bg"], settings_button)
+        txt = font_small.render("C", True, themes[current_theme]["button_text"])
+        screen.blit(txt, (settings_button.x + 5, settings_button.y + 5))
+
+        pygame.draw.rect(screen, themes[current_theme]["button_bg"], highscore_button)
+        txt_h = font_small.render("H", True, themes[current_theme]["button_text"])
+        screen.blit(txt_h, (highscore_button.x + 15, highscore_button.y + 5))
 
         for name, rect in buttons.items():
             pygame.draw.rect(screen,(70,70,70),rect,border_radius=10)
-            txt = font.render(name, True, (255,255,255))
+            txt = font.render(name, True, themes[current_theme]["text"])
             screen.blit(txt,(rect.x+100,rect.y+10))
 
     elif state == "game":
         remain = int(game_time - elapsed)
-        screen.blit(font_small.render(f"残り: {remain}s", True, (255,255,0)), (10,10))
-        screen.blit(font_small.render(f"ミス: {miss_count}", True, (255, 100, 100)), (10, 40))
+        screen.blit(font_small.render(f"残り: {remain}s", True, themes[current_theme]["text"]), (10, 10))
+        screen.blit(font_small.render(f"ミス: {miss_count}", True, themes[current_theme]["miss"]), (10, 40))
 
         if not showing:
-            # 日本語（改行対応）
-            draw_text_multiline(current_text, font, (255,255,255), 100, 120, 700)
-
-            # ローマ字（元コードのまま）
+            draw_text_multiline(current_text, font, themes[current_theme]["text"], 100, 120, 700)
             draw_roma_with_color(current_roma, len(typed), font, 100, 260, 700)
-
         else:
-            wpm_text = font.render(f"{show_wpm} WPM", True, (255,255,0))
-            latency_text = font.render(f"{show_latency}s", True, (0,200,255))
-
-            screen.blit(wpm_text, (330, 180))
-            screen.blit(latency_text, (330, 230))
+            screen.blit(font.render(f"{show_wpm} WPM", True, themes[current_theme]["text"]), (330, 180))
+            screen.blit(font.render(f"{show_latency}s", True, themes[current_theme]["text"]), (330, 230))
 
     elif state == "result":
-        # 全体平均WPM（正しい計算）
+        # ===== リザルト画面 =====
         wpm = int((total_inputs / game_time) * 60)
         acc = int(((total_inputs - miss_count) / total_inputs) * 100) if total_inputs else 0
-        # 平均初速
         avg_latency = sum(latency_list) / len(latency_list) if latency_list else 0
 
-        # e-typing 風 RKPM
         effective_inputs = max(total_inputs - 15, 1)
-        effective_time = max(game_time - 15 * avg_latency, 0.1)
+        effective_time = game_time - 15 * avg_latency
+        if effective_time < 1:
+            effective_time = 1
 
         rkpm = int((effective_inputs / effective_time) * 60)
-
-        # ★ スコア（WPMを強めに効かせるタイプ）
         score = int((wpm ** 1.2) * (acc / 100))
+        # ===== 記録更新フラグ =====
+        updated_score = False
+        updated_wpm = False
+        updated_max_wpm = False
+        updated_rkpm = False
 
-        screen.blit(font.render(f"スコア: {score}", True, (255, 200, 0)), (300, 160))
-        screen.blit(font.render(f"WPM: {wpm}", True, (255, 255, 0)), (300, 210))
-        screen.blit(font.render(f"正確性: {acc}%", True, (0, 255, 0)), (300, 260))
-        screen.blit(font.render(f"ミス数: {miss_count}", True, (255, 100, 100)), (300, 310))
-        screen.blit(font.render(f"最高WPM: {max_wpm}", True, (0, 255, 255)), (300, 360))
-        screen.blit(font.render(f"RKPM: {rkpm}", True, (0, 200, 255)), (300, 410))
-        screen.blit(font_small.render("キーでタイトルへ", True, (200, 200, 200)), (300, 520))
+
+        def get_rank(score):
+            if score >= 3600: return "Mythic"
+            elif score >= 3000: return "Transcendent"
+            elif score >= 2500: return "Celestial"
+            elif score >= 2000: return "Ethereal"
+            elif score >= 1600: return "Masterful"
+            elif score >= 1300: return "Supreme"
+            elif score >= 1100: return "Radiant"
+            elif score >= 900: return "Prime"
+            elif score >= 750: return "Skilled"
+            elif score >= 600: return "Steady"
+            elif score >= 500: return "Refined"
+            elif score >= 400: return "Focused"
+            elif score >= 300: return "Growing"
+            elif score >= 200: return "Rising"
+            elif score >= 120: return "Learner"
+            elif score >= 60: return "Novice"
+            elif score >= 30: return "Beginner"
+            else: return "Starter"
+
+        rank = get_rank(score)
+        rank_colors = {
+            "Mythic": (255,120,255),
+            "Transcendent": (180,140,255),
+            "Celestial": (140,180,255),
+            "Ethereal": (120,220,255),
+            "Masterful": (120,255,200),
+            "Supreme": (120,255,150),
+            "Radiant": (180,255,120),
+            "Prime": (230,255,120),
+            "Skilled": (255,230,120),
+            "Steady": (255,200,120),
+            "Refined": (255,170,120),
+            "Focused": (255,140,120),
+            "Growing": (255,120,120),
+            "Rising": (255,120,160),
+            "Learner": (255,120,200),
+            "Novice": (255,120,230),
+            "Beginner": (220,120,255),
+            "Starter": (180,120,255),
+        }
+        color = rank_colors.get(rank, themes[current_theme]["text"])
+
+        screen.blit(font.render(f"ランク: {rank}", True, color), (300, 120))
+        screen.blit(font.render(f"スコア: {score}", True, themes[current_theme]["text"]), (300, 160))
+        screen.blit(font.render(f"WPM: {wpm}", True, themes[current_theme]["text"]), (300, 210))
+        screen.blit(font.render(f"正確性: {acc}%", True, themes[current_theme]["text"]), (300, 260))
+        screen.blit(font.render(f"ミス数: {miss_count}", True, themes[current_theme]["miss"]), (300, 310))
+        screen.blit(font.render(f"最高WPM: {max_wpm}", True, themes[current_theme]["text"]), (300, 360))
+        screen.blit(font.render(f"RKPM: {rkpm}", True, themes[current_theme]["text"]), (300, 410))
+
+    elif state == "highscore":
+        screen.blit(font_big.render("High Scores", True, themes[current_theme]["text"]), (250, 80))
+
+        screen.blit(font_small.render(f"最高スコア: {records['best_score']} ({records['best_rank']})",
+                                      True, themes[current_theme]["text"]), (250, 180))
+        screen.blit(font_small.render(f"最高WPM: {records['best_wpm']}",
+                                      True, themes[current_theme]["text"]), (250, 220))
+        screen.blit(font_small.render(f"最高最高WPM: {records['best_max_wpm']}",
+                                      True, themes[current_theme]["text"]), (250, 260))
+        screen.blit(font_small.render(f"最高RKPM: {records['best_rkpm']}",
+                                      True, themes[current_theme]["text"]), (250, 300))
+
+        screen.blit(font_small.render("Enterで戻る", True, themes[current_theme]["text"]), (250, 360))
 
     pygame.display.flip()
     clock.tick(60)
+
 
