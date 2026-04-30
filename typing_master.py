@@ -376,30 +376,56 @@ def apply_small(candidates, small):
         "ょ": ["xyo","lyo","yo"],
     }
 
-    # 通常拗音（mya / sha / cha など）
-    normal = {
-        "ゃ": "ya",
-        "ゅ": "yu",
-        "ょ": "yo",
+    # 通常拗音（kya / sha / cha / jo など）
+    normal_map = {
+        "ゃ": {
+            "k": "kya", "g": "gya",
+            "s": "sha", "z": "ja", "j": "ja",
+            "t": "cha", "d": "ja",
+            "n": "nya",
+            "h": "hya", "b": "bya", "p": "pya",
+            "m": "mya", "r": "rya"
+        },
+        "ゅ": {
+            "k": "kyu", "g": "gyu",
+            "s": "shu", "z": "ju", "j": "ju",
+            "t": "chu", "d": "ju",
+            "n": "nyu",
+            "h": "hyu", "b": "byu", "p": "pyu",
+            "m": "myu", "r": "ryu"
+        },
+        "ょ": {
+            "k": "kyo", "g": "gyo",
+            "s": "sho", "z": "jo", "j": "jo",
+            "t": "cho", "d": "jo",
+            "n": "nyo",
+            "h": "hyo", "b": "byo", "p": "pyo",
+            "m": "myo", "r": "ryo"
+        }
     }
 
     new_list = []
+
     for c in candidates:
         # ★ 子音部分（最後の母音だけ削る）
         base = c
         while base and base[-1] in "aiueo":
             base = base[:-1]
 
-        # ★ “i” を削った分、元の c の最後の母音を保持する
-        #    例：shi → base=sh, last_vowel=i → sh + i + xya = shixya
-        last_vowel = c[len(base):]  # 例：shi → "i", chi → "i"
+        last_vowel = c[len(base):]  # 例：shi → "i"
 
-        # x系・l系・小文字
+        # ★ x系・l系・小文字
         for p in table[small]:
             new_list.append(base + last_vowel + p)
 
-        # 通常拗音（mya / cha / sha）
-        new_list.append(base + last_vowel + normal[small])
+        # ★ 通常拗音（kya / sha / cha / jo など）
+        if base:
+            head = base[0]  # 先頭子音だけ見る（sh, ch も s, c 扱い）
+            if head in normal_map[small]:
+                new_list.append(normal_map[small][head])
+
+        # ★ 変態ローマ字（shixya / jixyo など）
+        new_list.append(base + last_vowel + table[small][0])  # xya / xyu / xyo
 
     return new_list
 
